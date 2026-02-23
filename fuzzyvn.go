@@ -39,7 +39,6 @@ fuzzyvn.go Structure:
 │   ├── Size
 │   └── Clear
 └── Searcher Methods
-
 	├── NewSearcher
 	├── NewSearcherWithCache
 	├── Search
@@ -114,13 +113,6 @@ type FuzzyMatch struct {
 var intSlicePool = sync.Pool{
 	New: func() interface{} {
 		s := make([]int, 0, 64)
-		return &s
-	},
-}
-
-var targetRunePool = sync.Pool{
-	New: func() interface{} {
-		s := make([]rune, 0, 256)
 		return &s
 	},
 }
@@ -400,13 +392,6 @@ func LevenshteinRatio(s1, s2 string) int {
 	}
 	// Trả về chi phí cuối dựa trên độ dài s1 (phần tử cuối). Đọc tới đây mà không hiểu thì hãy xem lại ma trận
 	return column[s1Len]
-}
-
-/*
-isWordBoundary: Kiểm tra ký tự có phải word boundary không
-*/
-func isWordBoundary(r rune) bool {
-	return r == ' ' || r == '/' || r == '_' || r == '-' || r == '.' || r == '\\'
 }
 
 // =============================================================================
