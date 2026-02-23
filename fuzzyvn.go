@@ -87,7 +87,7 @@ type QueryCache struct {
 
 type Searcher struct {
 	Originals     []string       // Data gốc (có dấu, viết hoa thường lộn xộn bla bla). Dùng để trả về kết quả hiển thị
-	Normalized    []string       // Data đã chuẩn hóa cho fuzzy search
+	Normalized    [][]rune       // Data đã chuẩn hóa cho fuzzy search, lưu dưới dạng rune để tìm kiếm nhanh
 	FilenamesOnly []string       // Chỉ chứa tên file đã chuẩn hóa (bỏ đường dẫn). Dùng cho thuật toán Levenshtein (sửa lỗi chính tả)
 	FilePathToIdx map[string]int // Nhằm mục đích không phải tạo lại mỗi lần Search
 	Cache         *QueryCache    // Để lấy dữ liệu lịch sử
@@ -537,7 +537,7 @@ FuzzyFind: Tìm tất cả targets khớp với pattern
 - Nếu match thì thêm vào results (Index, Score, Positions)
 - Xong sort theo score giảm dần
 */
-func FuzzyFind(pattern string, targets []string) []FuzzyMatch {
+func FuzzyFind(pattern string, targets [][]rune) []FuzzyMatch {
 	patternRunes := []rune(Normalize(pattern)) // 1 alloc
 	if len(patternRunes) == 0 {
 		return nil
@@ -545,19 +545,8 @@ func FuzzyFind(pattern string, targets []string) []FuzzyMatch {
 	// Pre-allocate slice kết quả để tránh resize liên tục
 	results := make([]FuzzyMatch, 0, 1000)
 
-	for idx, targetStr := range targets {
-
-		// mượn buffer
-		ptr := targetRunePool.Get().(*[]rune)
-
-		// Ta clear buffer cũ, sau đó append từng rune của target vào
-		targetRunes := *ptr
-		targetRunes = targetRunes[:0]
-		for _, r := range targetStr {
-			targetRunes = append(targetRunes, r)
-		}
-
-		score, matched := fuzzyScoreGreedy(patternRunes, targetRunes)
+	for idx := range targets {
+		score, matched := fuzzyScoreGreedy(patternRunes, targets[idx])
 
 		if matched {
 			results = append(results, FuzzyMatch{
@@ -565,12 +554,6 @@ func FuzzyFind(pattern string, targets []string) []FuzzyMatch {
 				Score: score,
 			})
 		}
-
-		// IMPORTANT: TRẢ BUFFER VỀ POOL
-		// Vì targetRunes là slice header mới trỏ vào mảng nền của ptr
-		// Nên ta put cái mảng nền (đã mở rộng capacity nếu cần) lại vào pool
-		*ptr = targetRunes
-		targetRunePool.Put(ptr)
 	}
 	// Sort by score descending
 	sort.Slice(results, func(i, j int) bool {
@@ -591,7 +574,7 @@ Sử dụng goroutines để tăng tốc với datasets lớn
 - targets: Danh sách strings để search
 - Trả về: Slice of FuzzyMatch, sorted by score descending
 */
-func FuzzyFindParallel(pattern string, targets []string) []FuzzyMatch {
+func FuzzyFindParallel(pattern string, targets [][]rune) []FuzzyMatch {
 	patternRunes := []rune(pattern)
 	if len(patternRunes) == 0 {
 		return nil
@@ -660,21 +643,13 @@ func FuzzyFindParallel(pattern string, targets []string) []FuzzyMatch {
 			localResults := make([]FuzzyMatch, 0, (end-start)/5)
 
 			for i := start; i < end; i++ {
-				ptr := targetRunePool.Get().(*[]rune)
-				targetRunes := *ptr
-				targetRunes = targetRunes[:0]
-				for _, r := range targets[i] {
-					targetRunes = append(targetRunes, r)
-				}
-				score, matched := fuzzyScoreGreedy(patternRunes, targetRunes)
+				score, matched := fuzzyScoreGreedy(patternRunes, targets[i])
 				if matched {
 					localResults = append(localResults, FuzzyMatch{
 						Index: i,
 						Score: score,
 					})
 				}
-				*ptr = targetRunes
-				targetRunePool.Put(ptr)
 			}
 
 			resultChan <- localResults
@@ -1141,7 +1116,7 @@ func (c *QueryCache) Clear() {
 */
 func NewSearcher(items []string) *Searcher {
 	originals := make([]string, len(items))
-	normPaths := make([]string, len(items))
+	normPaths := make([][]rune, len(items))
 	normNames := make([]string, len(items))
 	pathMap := make(map[string]int, len(items))
 
@@ -1150,7 +1125,7 @@ func NewSearcher(items []string) *Searcher {
 		filename := filepath.Base(item)
 		// Ưu tiên tên file, theo path thì điểm thấp hơn
 		priorityString := filename + " " + item
-		normPaths[i] = Normalize(priorityString)
+		normPaths[i] = []rune(Normalize(priorityString))
 		normNames[i] = Normalize(filename)
 
 		// Map trong cache để sau này server tìm trong các file gốc nhanh hơn
@@ -1200,9 +1175,6 @@ func (s *Searcher) Search(query string) []string {
 	}
 	queryWords := strings.Fields(queryNorm)
 
-	// Ước lượng capacity là để hạn chế resize
-	uniqueResults := make(map[int]int, 50)
-
 	// Ví dụ: User từng search "main" và chọn main.go nhiều lần:
 	// cacheBoosts = {"/a/main.go": 5000}
 	var cacheBoosts map[string]int
@@ -1218,6 +1190,9 @@ func (s *Searcher) Search(query string) []string {
 	} else {
 		matches = FuzzyFind(queryNorm, s.Normalized)
 	}
+
+	// Ước lượng capacity là để hạn chế resize sau khi đã biết độ dài matches
+	uniqueResults := make(map[int]int, len(matches)+50)
 
 	// OPTIMIZATION: Chỉ tính word bonus cho top 30 results
 	// countWordMatches rất chậm (gọi LevenshteinRatio), không nên chạy cho tất cả
@@ -1339,7 +1314,7 @@ func (s *Searcher) Search(query string) []string {
 		Cache boost: 5000
 		Final score: 85 + 5000 = 5085 -> Lên top
 	*/
-	var rankedResults []MatchResult
+	rankedResults := make([]MatchResult, 0, len(uniqueResults))
 	for idx, score := range uniqueResults {
 		filePath := s.Originals[idx]
 		finalScore := score
