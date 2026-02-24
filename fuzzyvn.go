@@ -50,12 +50,14 @@ fuzzyvn.go Structure:
 package fuzzyvn
 
 import (
+	"math"
 	"path/filepath"
 	"runtime"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"unicode"
+	"unicode/utf8"
 
 	"golang.org/x/text/unicode/norm"
 )
@@ -87,10 +89,11 @@ type QueryCache struct {
 
 type Searcher struct {
 	Originals     []string       // Data gốc (có dấu, viết hoa thường lộn xộn bla bla). Dùng để trả về kết quả hiển thị
-	Normalized    []string       // Data đã chuẩn hóa cho fuzzy search
+	Normalized    [][]rune       // Data đã chuẩn hóa cho fuzzy search, lưu dưới dạng rune để tìm kiếm nhanh
 	FilenamesOnly []string       // Chỉ chứa tên file đã chuẩn hóa (bỏ đường dẫn). Dùng cho thuật toán Levenshtein (sửa lỗi chính tả)
 	FilePathToIdx map[string]int // Nhằm mục đích không phải tạo lại mỗi lần Search
 	Cache         *QueryCache    // Để lấy dữ liệu lịch sử
+	scoreBuf      []int          // Pre-alloc flat array cho Search(), reuse qua các lần gọi
 }
 
 /*
@@ -109,20 +112,7 @@ FuzzyMatch: Kết quả của một fuzzy match
 type FuzzyMatch struct {
 	Index int
 	Score int
-}
-
-var intSlicePool = sync.Pool{
-	New: func() interface{} {
-		s := make([]int, 0, 64)
-		return &s
-	},
-}
-
-var targetRunePool = sync.Pool{
-	New: func() interface{} {
-		s := make([]rune, 0, 256)
-		return &s
-	},
+	Exact bool
 }
 
 // =============================================================================
@@ -145,7 +135,7 @@ func countWordMatches(queryWords []string, target string) int {
 	if len(target) < 2 {
 		return 0
 	}
-	targetWords := strings.Fields(target)
+	targetWords := strings.FieldsFunc(target, isSeparator)
 	if len(targetWords) == 0 {
 		return 0
 	}
@@ -197,41 +187,39 @@ func Normalize(s string) string {
 		s = norm.NFC.String(s)
 	}
 
-	// 3. BUILDER: Dùng Builder để nối chuỗi hiệu quả
-	var b strings.Builder
-	// Grow đúng kích thước để tránh alloc nhiều lần.
-	// Chuỗi không dấu thường ngắn hơn hoặc bằng chuỗi có dấu.
-	b.Grow(len(s))
+	// 3. BUFFER: dùng []byte trực tiếp, nhanh hơn strings.Builder
+	buf := make([]byte, 0, len(s))
 
 	// 4. MANUAL MAPPING: Duyệt từng rune và map thủ công
-	// Lưu ý: Không dùng range strings.ToLower(s) để tránh tạo string tạm
 	for _, r := range s {
-		// Lowercase từng ký tự
 		r = unicode.ToLower(r)
 
 		switch r {
 		case 'á', 'à', 'ả', 'ã', 'ạ', 'ă', 'ắ', 'ằ', 'ẳ', 'ẵ', 'ặ', 'â', 'ấ', 'ầ', 'ẩ', 'ẫ', 'ậ':
-			b.WriteRune('a')
+			buf = append(buf, 'a')
 		case 'đ':
-			b.WriteRune('d')
+			buf = append(buf, 'd')
 		case 'é', 'è', 'ẻ', 'ẽ', 'ẹ', 'ê', 'ế', 'ề', 'ể', 'ễ', 'ệ':
-			b.WriteRune('e')
+			buf = append(buf, 'e')
 		case 'í', 'ì', 'ỉ', 'ĩ', 'ị':
-			b.WriteRune('i')
+			buf = append(buf, 'i')
 		case 'ó', 'ò', 'ỏ', 'õ', 'ọ', 'ô', 'ố', 'ồ', 'ổ', 'ỗ', 'ộ', 'ơ', 'ớ', 'ờ', 'ở', 'ỡ', 'ợ':
-			b.WriteRune('o')
+			buf = append(buf, 'o')
 		case 'ú', 'ù', 'ủ', 'ũ', 'ụ', 'ư', 'ứ', 'ừ', 'ử', 'ữ', 'ự':
-			b.WriteRune('u')
+			buf = append(buf, 'u')
 		case 'ý', 'ỳ', 'ỷ', 'ỹ', 'ỵ':
-			b.WriteRune('y')
+			buf = append(buf, 'y')
 		default:
-			// Giữ lại các ký tự ASCII (a-z, 0-9, symbol) và các ký tự Unicode khác không phải tiếng Việt
-			if r < 128 || unicode.IsLetter(r) || unicode.IsDigit(r) {
-				b.WriteRune(r)
+			if r < 128 {
+				buf = append(buf, byte(r))
+			} else if unicode.IsLetter(r) || unicode.IsDigit(r) {
+				var tmp [4]byte
+				n := utf8.EncodeRune(tmp[:], r)
+				buf = append(buf, tmp[:n]...)
 			}
 		}
 	}
-	return b.String()
+	return string(buf)
 }
 
 func fastSubstring(s string, n int) string {
@@ -265,6 +253,24 @@ func fastSubstring(s string, n int) string {
 	*/
 
 	return s
+}
+
+func containsRunes(target []rune, pattern []rune) bool {
+	if len(pattern) == 0 {
+		return true
+	}
+	if len(pattern) > len(target) {
+		return false
+	}
+
+	p0 := pattern[0]
+	n := len(pattern)
+	for i := 0; i <= len(target)-n; i++ {
+		if target[i] == p0 && slices.Equal(target[i:i+n], pattern) {
+			return true
+		}
+	}
+	return false
 }
 
 /*
@@ -308,24 +314,15 @@ func LevenshteinRatio(s1, s2 string) int {
 	if s2Len == 0 {
 		return s1Len
 	}
-	// Thay vì cấp phát mới (make) mỗi lần gọi, ta mượn slice từ Pool
-	// Giúp giảm allocation
-	ptr := intSlicePool.Get().(*[]int)
-	column := *ptr
-	// Kiểm tra sức chứa của slice mượn được
-	// Nếu slice mượn được quá bé không đủ chứa (s1Len + 1),
-	// bắt buộc phải cấp phát vùng nhớ mới to hơn.
-	if cap(column) < s1Len+1 {
+	// Stack array cho strings ngắn (99% trường hợp filename < 64 chars)
+	// Go compiler tự stack-allocate fixed-size array, zero heap alloc
+	var stackBuf [64]int
+	var column []int
+	if s1Len+1 <= len(stackBuf) {
+		column = stackBuf[:s1Len+1]
+	} else {
 		column = make([]int, s1Len+1)
 	}
-	// Resize lại độ dài slice đúng bằng nhu cầu sử dụng
-	column = column[:s1Len+1]
-	// IMPORTAN: Trả lại slice về Pool sau khi tính toán xong.
-	// Phải gán lại *ptr = column phòng trường hợp slice bị tạo mới (re-allocated)
-	defer func() {
-		*ptr = column
-		intSlicePool.Put(ptr)
-	}()
 
 	for y := 1; y <= s1Len; y++ {
 		column[y] = y
@@ -402,13 +399,6 @@ func LevenshteinRatio(s1, s2 string) int {
 	return column[s1Len]
 }
 
-/*
-isWordBoundary: Kiểm tra ký tự có phải word boundary không
-*/
-func isWordBoundary(r rune) bool {
-	return r == ' ' || r == '/' || r == '_' || r == '-' || r == '.' || r == '\\'
-}
-
 // =============================================================================
 // Fuzzy Matcher
 // =============================================================================
@@ -438,7 +428,12 @@ func fuzzyScoreGreedy(pattern []rune, target []rune) (int, bool) {
 	// Index hiện tại đang xét trong target
 	targetIdx := 0
 
-	for pIdx := range lenP {
+	// Bounds Check Elimination (BCE) hints:
+	// Giúp Go compiler bỏ qua thao tác kiểm tra an toàn tràn mảng (bounds check)
+	_ = target[lenT-1]
+	_ = pattern[lenP-1]
+
+	for pIdx := 0; pIdx < lenP; pIdx++ {
 		pChar := pattern[pIdx]
 		found := false
 
@@ -521,9 +516,11 @@ func fuzzyScoreGreedy(pattern []rune, target []rune) (int, bool) {
 		targetIdx = bestIdx + 1
 	}
 
-	// Phạt độ dài (để ưu tiên chuỗi ngắn hơn khi cùng điểm match)
-	// Ví dụ search "app" thì "App" (3) ngon hơn "Application" (11)
-	totalScore -= (lenT - lenP)
+	// Penalty nếu độ dài chênh lệch nhiều
+	lenDiff := lenT - lenP
+	if lenDiff > 0 {
+		totalScore -= lenDiff * 2
+	}
 
 	return totalScore, true
 }
@@ -537,7 +534,7 @@ FuzzyFind: Tìm tất cả targets khớp với pattern
 - Nếu match thì thêm vào results (Index, Score, Positions)
 - Xong sort theo score giảm dần
 */
-func FuzzyFind(pattern string, targets []string) []FuzzyMatch {
+func FuzzyFind(pattern string, targets [][]rune) []FuzzyMatch {
 	patternRunes := []rune(Normalize(pattern)) // 1 alloc
 	if len(patternRunes) == 0 {
 		return nil
@@ -545,36 +542,25 @@ func FuzzyFind(pattern string, targets []string) []FuzzyMatch {
 	// Pre-allocate slice kết quả để tránh resize liên tục
 	results := make([]FuzzyMatch, 0, 1000)
 
-	for idx, targetStr := range targets {
-
-		// mượn buffer
-		ptr := targetRunePool.Get().(*[]rune)
-
-		// Ta clear buffer cũ, sau đó append từng rune của target vào
-		targetRunes := *ptr
-		targetRunes = targetRunes[:0]
-		for _, r := range targetStr {
-			targetRunes = append(targetRunes, r)
-		}
-
-		score, matched := fuzzyScoreGreedy(patternRunes, targetRunes)
+	for idx := range targets {
+		score, matched := fuzzyScoreGreedy(patternRunes, targets[idx])
 
 		if matched {
+			exact := containsRunes(targets[idx], patternRunes)
+			if exact {
+				score += 200
+			}
+
 			results = append(results, FuzzyMatch{
 				Index: idx,
 				Score: score,
+				Exact: exact,
 			})
 		}
-
-		// IMPORTANT: TRẢ BUFFER VỀ POOL
-		// Vì targetRunes là slice header mới trỏ vào mảng nền của ptr
-		// Nên ta put cái mảng nền (đã mở rộng capacity nếu cần) lại vào pool
-		*ptr = targetRunes
-		targetRunePool.Put(ptr)
 	}
 	// Sort by score descending
-	sort.Slice(results, func(i, j int) bool {
-		return results[i].Score > results[j].Score
+	slices.SortFunc(results, func(a, b FuzzyMatch) int {
+		return b.Score - a.Score
 	})
 
 	return results
@@ -591,7 +577,7 @@ Sử dụng goroutines để tăng tốc với datasets lớn
 - targets: Danh sách strings để search
 - Trả về: Slice of FuzzyMatch, sorted by score descending
 */
-func FuzzyFindParallel(pattern string, targets []string) []FuzzyMatch {
+func FuzzyFindParallel(pattern string, targets [][]rune) []FuzzyMatch {
 	patternRunes := []rune(pattern)
 	if len(patternRunes) == 0 {
 		return nil
@@ -660,21 +646,20 @@ func FuzzyFindParallel(pattern string, targets []string) []FuzzyMatch {
 			localResults := make([]FuzzyMatch, 0, (end-start)/5)
 
 			for i := start; i < end; i++ {
-				ptr := targetRunePool.Get().(*[]rune)
-				targetRunes := *ptr
-				targetRunes = targetRunes[:0]
-				for _, r := range targets[i] {
-					targetRunes = append(targetRunes, r)
-				}
-				score, matched := fuzzyScoreGreedy(patternRunes, targetRunes)
+				score, matched := fuzzyScoreGreedy(patternRunes, targets[i])
+
 				if matched {
+					exact := containsRunes(targets[i], patternRunes)
+					if exact {
+						score += 200
+					}
+
 					localResults = append(localResults, FuzzyMatch{
 						Index: i,
 						Score: score,
+						Exact: exact,
 					})
 				}
-				*ptr = targetRunes
-				targetRunePool.Put(ptr)
 			}
 
 			resultChan <- localResults
@@ -693,8 +678,8 @@ func FuzzyFindParallel(pattern string, targets []string) []FuzzyMatch {
 	}
 
 	// Sắp xếp kết quả theo score giảm dần
-	sort.Slice(allResults, func(i, j int) bool {
-		return allResults[i].Score > allResults[j].Score
+	slices.SortFunc(allResults, func(a, b FuzzyMatch) int {
+		return b.Score - a.Score
 	})
 
 	return allResults
@@ -765,6 +750,7 @@ func (c *QueryCache) querySimilarity(q1, q2 string) int {
 	if len(q1) >= 3 && len(q2) >= 3 {
 		// Tính khoảng cách Levenshtein
 		dist := LevenshteinRatio(q1, q2)
+
 		maxLen := len(q1)
 		if len(q2) > maxLen {
 			maxLen = len(q2)
@@ -1031,8 +1017,8 @@ func (c *QueryCache) GetCachedFiles(query string, limit int) []string {
 		}
 	}
 
-	sort.Slice(matches, func(i, j int) bool {
-		return matches[i].score > matches[j].score
+	slices.SortFunc(matches, func(a, b fileScore) int {
+		return b.score - a.score
 	})
 
 	result := make([]string, 0, limit)
@@ -1097,11 +1083,11 @@ func (c *QueryCache) GetAllRecentFiles(limit int) []string {
 		files = append(files, f)
 	}
 
-	sort.Slice(files, func(i, j int) bool {
-		if files[i].queryIndex != files[j].queryIndex {
-			return files[i].queryIndex > files[j].queryIndex
+	slices.SortFunc(files, func(a, b *fileInfo) int {
+		if a.queryIndex != b.queryIndex {
+			return b.queryIndex - a.queryIndex
 		}
-		return files[i].count > files[j].count
+		return b.count - a.count
 	})
 
 	result := make([]string, 0, limit)
@@ -1141,7 +1127,7 @@ func (c *QueryCache) Clear() {
 */
 func NewSearcher(items []string) *Searcher {
 	originals := make([]string, len(items))
-	normPaths := make([]string, len(items))
+	normPaths := make([][]rune, len(items))
 	normNames := make([]string, len(items))
 	pathMap := make(map[string]int, len(items))
 
@@ -1150,11 +1136,17 @@ func NewSearcher(items []string) *Searcher {
 		filename := filepath.Base(item)
 		// Ưu tiên tên file, theo path thì điểm thấp hơn
 		priorityString := filename + " " + item
-		normPaths[i] = Normalize(priorityString)
+		normPaths[i] = []rune(Normalize(priorityString))
 		normNames[i] = Normalize(filename)
 
 		// Map trong cache để sau này server tìm trong các file gốc nhanh hơn
 		pathMap[item] = i
+	}
+
+	// Pre-alloc score buffer cho Search(), fill sentinel
+	scoreBuf := make([]int, len(items))
+	for i := range scoreBuf {
+		scoreBuf[i] = math.MinInt
 	}
 
 	return &Searcher{
@@ -1163,6 +1155,7 @@ func NewSearcher(items []string) *Searcher {
 		FilenamesOnly: normNames,
 		FilePathToIdx: pathMap,
 		Cache:         NewQueryCache(),
+		scoreBuf:      scoreBuf,
 	}
 }
 
@@ -1200,9 +1193,6 @@ func (s *Searcher) Search(query string) []string {
 	}
 	queryWords := strings.Fields(queryNorm)
 
-	// Ước lượng capacity là để hạn chế resize
-	uniqueResults := make(map[int]int, 50)
-
 	// Ví dụ: User từng search "main" và chọn main.go nhiều lần:
 	// cacheBoosts = {"/a/main.go": 5000}
 	var cacheBoosts map[string]int
@@ -1219,6 +1209,16 @@ func (s *Searcher) Search(query string) []string {
 		matches = FuzzyFind(queryNorm, s.Normalized)
 	}
 
+	// Reuse pre-alloc flat array, chỉ reset những index đã ghi
+	uniqueScores := s.scoreBuf
+	dirtyIndices := make([]int, 0, len(matches)+50)
+	// Defer cleanup: reset những ô đã dùng về sentinel
+	defer func() {
+		for _, idx := range dirtyIndices {
+			uniqueScores[idx] = math.MinInt
+		}
+	}()
+
 	// OPTIMIZATION: Chỉ tính word bonus cho top 30 results
 	// countWordMatches rất chậm (gọi LevenshteinRatio), không nên chạy cho tất cả
 	maxWordBonusCalc := 30
@@ -1230,11 +1230,29 @@ func (s *Searcher) Search(query string) []string {
 		if i < maxWordBonusCalc {
 			// Word bonus tính trên tên file (không phải full path)
 			wordMatches := countWordMatches(queryWords, s.FilenamesOnly[m.Index])
-			wordBonus := wordMatches * 3000
-			uniqueResults[m.Index] = m.Score + wordBonus
+			wordBonus := wordMatches * 800
+
+			// FFF.nvim logic: Exact filename bonus
+			filenameBonus := 0
+			if m.Exact {
+				filenameBonus += 400
+			}
+			if s.FilenamesOnly[m.Index] == queryNorm {
+				filenameBonus += 1000 // Tuyệt đối khớp file
+			}
+
+			// FFF.nvim logic: Distance Penalty
+			pathLenPenalty := len(s.Originals[m.Index]) / 5
+
+			if uniqueScores[m.Index] == math.MinInt {
+				dirtyIndices = append(dirtyIndices, m.Index)
+			}
+			uniqueScores[m.Index] = m.Score + wordBonus + filenameBonus - pathLenPenalty
 		} else {
-			// Với results còn lại, chỉ dùng fuzzy score
-			uniqueResults[m.Index] = m.Score
+			if uniqueScores[m.Index] == math.MinInt {
+				dirtyIndices = append(dirtyIndices, m.Index)
+			}
+			uniqueScores[m.Index] = m.Score - (len(s.Originals[m.Index]) / 5)
 		}
 	}
 
@@ -1288,25 +1306,36 @@ func (s *Searcher) Search(query string) []string {
 			// Nếu điểm sai chính tả nhỏ hơn ngưỡng cho phép thì tính điểm
 			// Robust solution khi sai chính tả đi quá xa (hoặc nếu không thì mong bạn có thể mở PR hỗ trợ mình)
 			if dist <= baseThreshold {
-				score := 10000 - (dist * 100)
+				// Base score 3000
+				score := 3000 - (dist * 400)
 				runeCountName := 0
 				for range nameNorm {
 					runeCountName++
 				}
 				lenDiff := runeCountName - queryLen
 				if lenDiff > 0 {
-					score -= (lenDiff * 10)
+					score -= (lenDiff * 15) // Phạt độ dài tên
 				}
+
+				// Thưởng exact
+				if lenDiff == 0 && dist == 0 {
+					score += 1000
+				}
+
+				// Phạt độ dài đường dẫn
+				score -= len(s.Originals[i]) / 5
 
 				// Thêm word bonus cho Levenshtein matches
-				// Dùng tên file để tính word matches (không phải full path)
 				if dist < 2 {
 					wordMatches := countWordMatches(queryWords, s.FilenamesOnly[i])
-					score += wordMatches * 3000
+					score += wordMatches * 800
 				}
 
-				if oldScore, exists := uniqueResults[i]; !exists || score > oldScore {
-					uniqueResults[i] = score
+				if uniqueScores[i] == math.MinInt {
+					dirtyIndices = append(dirtyIndices, i)
+				}
+				if uniqueScores[i] == math.MinInt || score > uniqueScores[i] {
+					uniqueScores[i] = score
 				}
 			}
 		}
@@ -1326,10 +1355,10 @@ func (s *Searcher) Search(query string) []string {
 		vì nó cũng không có độ chính xác quá cao
 	*/
 	for cachedPath, boost := range cacheBoosts {
-		// Tra cứu trực tiếp từ map đã pre-compute
 		if idx, exists := s.FilePathToIdx[cachedPath]; exists {
-			if _, alreadyInResults := uniqueResults[idx]; !alreadyInResults {
-				uniqueResults[idx] = boost
+			if uniqueScores[idx] == math.MinInt {
+				dirtyIndices = append(dirtyIndices, idx)
+				uniqueScores[idx] = boost
 			}
 		}
 	}
@@ -1339,13 +1368,16 @@ func (s *Searcher) Search(query string) []string {
 		Cache boost: 5000
 		Final score: 85 + 5000 = 5085 -> Lên top
 	*/
-	var rankedResults []MatchResult
-	for idx, score := range uniqueResults {
+	rankedResults := make([]MatchResult, 0, 100)
+	for idx, score := range uniqueScores {
+		if score == math.MinInt {
+			continue
+		}
 		filePath := s.Originals[idx]
 		finalScore := score
 
 		if boost, exists := cacheBoosts[filePath]; exists {
-			if score != boost { // Tránh duplicate
+			if score != boost {
 				finalScore += boost
 			}
 		}
@@ -1358,11 +1390,11 @@ func (s *Searcher) Search(query string) []string {
 	// Logic:
 	// Điểm cao lên trước
 	// Cùng điểm, ưu tiên file path ngắn
-	sort.SliceStable(rankedResults, func(i, j int) bool {
-		if rankedResults[i].Score == rankedResults[j].Score {
-			return len(rankedResults[i].Str) < len(rankedResults[j].Str)
+	slices.SortFunc(rankedResults, func(a, b MatchResult) int {
+		if a.Score != b.Score {
+			return b.Score - a.Score
 		}
-		return rankedResults[i].Score > rankedResults[j].Score
+		return len(a.Str) - len(b.Str)
 	})
 	// Trả về top 20, nếu kết quả ít hơn 20 thì show bấy nhiêu thôi
 	// Hãy xem demo

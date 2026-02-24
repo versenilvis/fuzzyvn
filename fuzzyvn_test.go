@@ -594,7 +594,7 @@ func BenchmarkSearch_RealWorld(b *testing.B) {
 		searcher := NewSearcher(files50k)
 
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			searcher.Search("config")
 		}
 	})
@@ -603,7 +603,7 @@ func BenchmarkSearch_RealWorld(b *testing.B) {
 		searcher := NewSearcher(allFiles)
 
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			searcher.Search("config")
 		}
 	})
@@ -612,7 +612,7 @@ func BenchmarkSearch_RealWorld(b *testing.B) {
 		searcher := NewSearcher(allFiles)
 
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			searcher.Search("conifg")
 		}
 	})
@@ -622,7 +622,7 @@ func BenchmarkNewSearcher(b *testing.B) {
 	files := generateTestFiles(1000)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		NewSearcher(files)
 	}
 }
@@ -633,7 +633,7 @@ func BenchmarkSearch(b *testing.B) {
 		searcher := NewSearcher(files)
 
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			searcher.Search("main")
 		}
 	})
@@ -643,7 +643,7 @@ func BenchmarkSearch(b *testing.B) {
 		searcher := NewSearcher(files)
 
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			searcher.Search("main")
 		}
 	})
@@ -653,7 +653,7 @@ func BenchmarkSearch(b *testing.B) {
 		searcher := NewSearcher(files)
 
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			searcher.Search("config")
 		}
 	})
@@ -665,14 +665,14 @@ func BenchmarkSearchVietnamese(b *testing.B) {
 
 	b.Run("tiếng Việt có dấu", func(b *testing.B) {
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			searcher.Search("báo cáo")
 		}
 	})
 
 	b.Run("tiếng Việt không dấu", func(b *testing.B) {
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			searcher.Search("bao cao")
 		}
 	})
@@ -687,7 +687,7 @@ func BenchmarkSearchWithCache(b *testing.B) {
 	searcher.RecordSelection("config", files[2])
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		searcher.Search("main")
 	}
 }
@@ -702,7 +702,7 @@ func BenchmarkNormalize(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		for _, s := range testStrings {
 			Normalize(s)
 		}
@@ -718,7 +718,7 @@ func BenchmarkLevenshteinRatio(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		for _, p := range pairs {
 			LevenshteinRatio(p.a, p.b)
 		}
@@ -729,8 +729,10 @@ func BenchmarkRecordSelection(b *testing.B) {
 	cache := NewQueryCache()
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	i := 0
+	for b.Loop() {
 		cache.RecordSelection(fmt.Sprintf("query%d", i%100), fmt.Sprintf("/file%d.go", i%1000))
+		i++
 	}
 }
 
@@ -741,7 +743,7 @@ func BenchmarkGetBoostScores(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		cache.GetBoostScores("query50")
 	}
 }
