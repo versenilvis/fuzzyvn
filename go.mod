@@ -1,4 +1,4 @@
-module github.com/verse91/fuzzyvn
+module github.com/versenilvis/fuzzyvn
 
 go 1.26.0
 
