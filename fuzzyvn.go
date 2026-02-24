@@ -261,6 +261,28 @@ func fastSubstring(s string, n int) string {
 	return s
 }
 
+func containsRunes(target []rune, pattern []rune) bool {
+	if len(pattern) == 0 {
+		return true
+	}
+	if len(pattern) > len(target) {
+		return false
+	}
+	for i := 0; i <= len(target)-len(pattern); i++ {
+		match := true
+		for j := range pattern {
+			if target[i+j] != pattern[j] {
+				match = false
+				break
+			}
+		}
+		if match {
+			return true
+		}
+	}
+	return false
+}
+
 /*
 - Levenshtein Distance: https://viblo.asia/p/khoang-cach-levenshtein-va-fuzzy-query-trong-elasticsearch-jvElaOXAKkw
 - Bạn hiểu nôm na là để tính độ sai lệch khi gõ sai, tìm kết quả gần khớp với ý muốn của bạn nhất
@@ -535,13 +557,12 @@ func FuzzyFind(pattern string, targets [][]rune) []FuzzyMatch {
 	for idx := range targets {
 		score, matched := fuzzyScoreGreedy(patternRunes, targets[idx])
 
-		exact := false
-		if strings.Contains(string(targets[idx]), string(patternRunes)) {
-			exact = true
-			score += 200
-		}
-
 		if matched {
+			exact := containsRunes(targets[idx], patternRunes)
+			if exact {
+				score += 200
+			}
+
 			results = append(results, FuzzyMatch{
 				Index: idx,
 				Score: score,
@@ -638,12 +659,13 @@ func FuzzyFindParallel(pattern string, targets [][]rune) []FuzzyMatch {
 
 			for i := start; i < end; i++ {
 				score, matched := fuzzyScoreGreedy(patternRunes, targets[i])
-				exact := false
-				if strings.Contains(string(targets[i]), string(patternRunes)) {
-					exact = true
-					score += 200
-				}
+
 				if matched {
+					exact := containsRunes(targets[i], patternRunes)
+					if exact {
+						score += 200
+					}
+
 					localResults = append(localResults, FuzzyMatch{
 						Index: i,
 						Score: score,
