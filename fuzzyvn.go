@@ -50,12 +50,14 @@ fuzzyvn.go Structure:
 package fuzzyvn
 
 import (
+	"math"
 	"path/filepath"
 	"runtime"
 	"slices"
 	"strings"
 	"sync"
 	"unicode"
+	"unicode/utf8"
 
 	"golang.org/x/text/unicode/norm"
 )
@@ -91,6 +93,7 @@ type Searcher struct {
 	FilenamesOnly []string       // Chỉ chứa tên file đã chuẩn hóa (bỏ đường dẫn). Dùng cho thuật toán Levenshtein (sửa lỗi chính tả)
 	FilePathToIdx map[string]int // Nhằm mục đích không phải tạo lại mỗi lần Search
 	Cache         *QueryCache    // Để lấy dữ liệu lịch sử
+	scoreBuf      []int          // Pre-alloc flat array cho Search(), reuse qua các lần gọi
 }
 
 /*
@@ -184,41 +187,39 @@ func Normalize(s string) string {
 		s = norm.NFC.String(s)
 	}
 
-	// 3. BUILDER: Dùng Builder để nối chuỗi hiệu quả
-	var b strings.Builder
-	// Grow đúng kích thước để tránh alloc nhiều lần.
-	// Chuỗi không dấu thường ngắn hơn hoặc bằng chuỗi có dấu.
-	b.Grow(len(s))
+	// 3. BUFFER: dùng []byte trực tiếp, nhanh hơn strings.Builder
+	buf := make([]byte, 0, len(s))
 
 	// 4. MANUAL MAPPING: Duyệt từng rune và map thủ công
-	// Lưu ý: Không dùng range strings.ToLower(s) để tránh tạo string tạm
 	for _, r := range s {
-		// Lowercase từng ký tự
 		r = unicode.ToLower(r)
 
 		switch r {
 		case 'á', 'à', 'ả', 'ã', 'ạ', 'ă', 'ắ', 'ằ', 'ẳ', 'ẵ', 'ặ', 'â', 'ấ', 'ầ', 'ẩ', 'ẫ', 'ậ':
-			b.WriteRune('a')
+			buf = append(buf, 'a')
 		case 'đ':
-			b.WriteRune('d')
+			buf = append(buf, 'd')
 		case 'é', 'è', 'ẻ', 'ẽ', 'ẹ', 'ê', 'ế', 'ề', 'ể', 'ễ', 'ệ':
-			b.WriteRune('e')
+			buf = append(buf, 'e')
 		case 'í', 'ì', 'ỉ', 'ĩ', 'ị':
-			b.WriteRune('i')
+			buf = append(buf, 'i')
 		case 'ó', 'ò', 'ỏ', 'õ', 'ọ', 'ô', 'ố', 'ồ', 'ổ', 'ỗ', 'ộ', 'ơ', 'ớ', 'ờ', 'ở', 'ỡ', 'ợ':
-			b.WriteRune('o')
+			buf = append(buf, 'o')
 		case 'ú', 'ù', 'ủ', 'ũ', 'ụ', 'ư', 'ứ', 'ừ', 'ử', 'ữ', 'ự':
-			b.WriteRune('u')
+			buf = append(buf, 'u')
 		case 'ý', 'ỳ', 'ỷ', 'ỹ', 'ỵ':
-			b.WriteRune('y')
+			buf = append(buf, 'y')
 		default:
-			// Giữ lại các ký tự ASCII (a-z, 0-9, symbol) và các ký tự Unicode khác không phải tiếng Việt
-			if r < 128 || unicode.IsLetter(r) || unicode.IsDigit(r) {
-				b.WriteRune(r)
+			if r < 128 {
+				buf = append(buf, byte(r))
+			} else if unicode.IsLetter(r) || unicode.IsDigit(r) {
+				var tmp [4]byte
+				n := utf8.EncodeRune(tmp[:], r)
+				buf = append(buf, tmp[:n]...)
 			}
 		}
 	}
-	return b.String()
+	return string(buf)
 }
 
 func fastSubstring(s string, n int) string {
@@ -1142,12 +1143,19 @@ func NewSearcher(items []string) *Searcher {
 		pathMap[item] = i
 	}
 
+	// Pre-alloc score buffer cho Search(), fill sentinel
+	scoreBuf := make([]int, len(items))
+	for i := range scoreBuf {
+		scoreBuf[i] = math.MinInt
+	}
+
 	return &Searcher{
 		Originals:     items,
 		Normalized:    normPaths,
 		FilenamesOnly: normNames,
 		FilePathToIdx: pathMap,
 		Cache:         NewQueryCache(),
+		scoreBuf:      scoreBuf,
 	}
 }
 
@@ -1201,9 +1209,15 @@ func (s *Searcher) Search(query string) []string {
 		matches = FuzzyFind(queryNorm, s.Normalized)
 	}
 
-	// Ước lượng capacity là để hạn chế resize
-	// Capacity cố định 1000 thay vì map resize bằng len matches khổng lồ
-	uniqueResults := make(map[int]int, 1000)
+	// Reuse pre-alloc flat array, chỉ reset những index đã ghi
+	uniqueScores := s.scoreBuf
+	dirtyIndices := make([]int, 0, len(matches)+50)
+	// Defer cleanup: reset những ô đã dùng về sentinel
+	defer func() {
+		for _, idx := range dirtyIndices {
+			uniqueScores[idx] = math.MinInt
+		}
+	}()
 
 	// OPTIMIZATION: Chỉ tính word bonus cho top 30 results
 	// countWordMatches rất chậm (gọi LevenshteinRatio), không nên chạy cho tất cả
@@ -1230,10 +1244,15 @@ func (s *Searcher) Search(query string) []string {
 			// FFF.nvim logic: Distance Penalty
 			pathLenPenalty := len(s.Originals[m.Index]) / 5
 
-			uniqueResults[m.Index] = m.Score + wordBonus + filenameBonus - pathLenPenalty
+			if uniqueScores[m.Index] == math.MinInt {
+				dirtyIndices = append(dirtyIndices, m.Index)
+			}
+			uniqueScores[m.Index] = m.Score + wordBonus + filenameBonus - pathLenPenalty
 		} else {
-			// Với results còn lại, chỉ dùng fuzzy score
-			uniqueResults[m.Index] = m.Score - (len(s.Originals[m.Index]) / 5)
+			if uniqueScores[m.Index] == math.MinInt {
+				dirtyIndices = append(dirtyIndices, m.Index)
+			}
+			uniqueScores[m.Index] = m.Score - (len(s.Originals[m.Index]) / 5)
 		}
 	}
 
@@ -1312,8 +1331,11 @@ func (s *Searcher) Search(query string) []string {
 					score += wordMatches * 800
 				}
 
-				if oldScore, exists := uniqueResults[i]; !exists || score > oldScore {
-					uniqueResults[i] = score
+				if uniqueScores[i] == math.MinInt {
+					dirtyIndices = append(dirtyIndices, i)
+				}
+				if uniqueScores[i] == math.MinInt || score > uniqueScores[i] {
+					uniqueScores[i] = score
 				}
 			}
 		}
@@ -1333,10 +1355,10 @@ func (s *Searcher) Search(query string) []string {
 		vì nó cũng không có độ chính xác quá cao
 	*/
 	for cachedPath, boost := range cacheBoosts {
-		// Tra cứu trực tiếp từ map đã pre-compute
 		if idx, exists := s.FilePathToIdx[cachedPath]; exists {
-			if _, alreadyInResults := uniqueResults[idx]; !alreadyInResults {
-				uniqueResults[idx] = boost
+			if uniqueScores[idx] == math.MinInt {
+				dirtyIndices = append(dirtyIndices, idx)
+				uniqueScores[idx] = boost
 			}
 		}
 	}
@@ -1346,13 +1368,16 @@ func (s *Searcher) Search(query string) []string {
 		Cache boost: 5000
 		Final score: 85 + 5000 = 5085 -> Lên top
 	*/
-	rankedResults := make([]MatchResult, 0, len(uniqueResults))
-	for idx, score := range uniqueResults {
+	rankedResults := make([]MatchResult, 0, 100)
+	for idx, score := range uniqueScores {
+		if score == math.MinInt {
+			continue
+		}
 		filePath := s.Originals[idx]
 		finalScore := score
 
 		if boost, exists := cacheBoosts[filePath]; exists {
-			if score != boost { // Tránh duplicate
+			if score != boost {
 				finalScore += boost
 			}
 		}
