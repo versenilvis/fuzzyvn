@@ -39,6 +39,7 @@ fuzzyvn.go Structure:
 │   ├── Size
 │   └── Clear
 └── Searcher Methods
+
 	├── NewSearcher
 	├── NewSearcherWithCache
 	├── Search
@@ -108,6 +109,7 @@ FuzzyMatch: Kết quả của một fuzzy match
 type FuzzyMatch struct {
 	Index int
 	Score int
+	Exact bool
 }
 
 var intSlicePool = sync.Pool{
@@ -133,7 +135,7 @@ func isSeparator(r rune) bool {
 	return r == '/' || r == '\\' || r == '_' || r == '-' || r == '.' || r == ' ' || r == ':'
 }
 
-func countWordMatches(queryWords []string, target string) int {
+func countWordMatches(queryWords []string, target string, levBuf *[]int) int {
 	if len(target) < 2 {
 		return 0
 	}
@@ -158,7 +160,7 @@ func countWordMatches(queryWords []string, target string) int {
 			// Fuzzy match: cho phép 1 lỗi nếu từ >= 3 ký tự
 			// CHỈ check Levenshtein nếu độ dài gần bằng nhau
 			if len(qWord) >= 3 && len(tWord) >= 3 && abs(len(qWord)-len(tWord)) <= 1 {
-				dist := LevenshteinRatio(qWord, tWord)
+				dist := LevenshteinRatio(qWord, tWord, levBuf)
 				if dist <= 1 {
 					count++
 					break
@@ -273,7 +275,7 @@ func fastSubstring(s string, n int) string {
 NOTE: 1 điều lưu ý là ta không cần quan tâm chữ hoa, chữ thường vì đã chuẩn hóa rồi
 */
 
-func LevenshteinRatio(s1, s2 string) int {
+func LevenshteinRatio(s1, s2 string, levBuf *[]int) int {
 	/*
 		Đây là trường hợp biến chuỗi s1 thành "chuỗi rỗng"
 		Ví dụ s1 = "ABC", s2 = ""
@@ -302,8 +304,7 @@ func LevenshteinRatio(s1, s2 string) int {
 	}
 	// Thay vì cấp phát mới (make) mỗi lần gọi, ta mượn slice từ Pool
 	// Giúp giảm allocation
-	ptr := intSlicePool.Get().(*[]int)
-	column := *ptr
+	column := *levBuf
 	// Kiểm tra sức chứa của slice mượn được
 	// Nếu slice mượn được quá bé không đủ chứa (s1Len + 1),
 	// bắt buộc phải cấp phát vùng nhớ mới to hơn.
@@ -315,8 +316,7 @@ func LevenshteinRatio(s1, s2 string) int {
 	// IMPORTAN: Trả lại slice về Pool sau khi tính toán xong.
 	// Phải gán lại *ptr = column phòng trường hợp slice bị tạo mới (re-allocated)
 	defer func() {
-		*ptr = column
-		intSlicePool.Put(ptr)
+		*levBuf = column
 	}()
 
 	for y := 1; y <= s1Len; y++ {
@@ -506,9 +506,11 @@ func fuzzyScoreGreedy(pattern []rune, target []rune) (int, bool) {
 		targetIdx = bestIdx + 1
 	}
 
-	// Phạt độ dài (để ưu tiên chuỗi ngắn hơn khi cùng điểm match)
-	// Ví dụ search "app" thì "App" (3) ngon hơn "Application" (11)
-	totalScore -= (lenT - lenP)
+	// Penalty nếu độ dài chênh lệch nhiều
+	lenDiff := lenT - lenP
+	if lenDiff > 0 {
+		totalScore -= lenDiff * 2
+	}
 
 	return totalScore, true
 }
@@ -533,10 +535,17 @@ func FuzzyFind(pattern string, targets [][]rune) []FuzzyMatch {
 	for idx := range targets {
 		score, matched := fuzzyScoreGreedy(patternRunes, targets[idx])
 
+		exact := false
+		if strings.Contains(string(targets[idx]), string(patternRunes)) {
+			exact = true
+			score += 200
+		}
+
 		if matched {
 			results = append(results, FuzzyMatch{
 				Index: idx,
 				Score: score,
+				Exact: exact,
 			})
 		}
 	}
@@ -629,10 +638,16 @@ func FuzzyFindParallel(pattern string, targets [][]rune) []FuzzyMatch {
 
 			for i := start; i < end; i++ {
 				score, matched := fuzzyScoreGreedy(patternRunes, targets[i])
+				exact := false
+				if strings.Contains(string(targets[i]), string(patternRunes)) {
+					exact = true
+					score += 200
+				}
 				if matched {
 					localResults = append(localResults, FuzzyMatch{
 						Index: i,
 						Score: score,
+						Exact: exact,
 					})
 				}
 			}
@@ -724,7 +739,10 @@ func (c *QueryCache) querySimilarity(q1, q2 string) int {
 	*/
 	if len(q1) >= 3 && len(q2) >= 3 {
 		// Tính khoảng cách Levenshtein
-		dist := LevenshteinRatio(q1, q2)
+		levBuf := intSlicePool.Get().(*[]int)
+		dist := LevenshteinRatio(q1, q2, levBuf)
+		intSlicePool.Put(levBuf)
+
 		maxLen := len(q1)
 		if len(q2) > maxLen {
 			maxLen = len(q2)
@@ -1176,8 +1194,9 @@ func (s *Searcher) Search(query string) []string {
 		matches = FuzzyFind(queryNorm, s.Normalized)
 	}
 
-	// Ước lượng capacity là để hạn chế resize sau khi đã biết độ dài matches
-	uniqueResults := make(map[int]int, len(matches)+50)
+	// Ước lượng capacity là để hạn chế resize
+	// Capacity cố định 1000 thay vì map resize bằng len matches khổng lồ
+	uniqueResults := make(map[int]int, 1000)
 
 	// OPTIMIZATION: Chỉ tính word bonus cho top 30 results
 	// countWordMatches rất chậm (gọi LevenshteinRatio), không nên chạy cho tất cả
@@ -1186,15 +1205,32 @@ func (s *Searcher) Search(query string) []string {
 		maxWordBonusCalc = len(matches)
 	}
 
+	// Lấy buffer Levenshtein dùng chung
+	levBuf := intSlicePool.Get().(*[]int)
+	defer intSlicePool.Put(levBuf)
+
 	for i, m := range matches {
 		if i < maxWordBonusCalc {
 			// Word bonus tính trên tên file (không phải full path)
-			wordMatches := countWordMatches(queryWords, s.FilenamesOnly[m.Index])
-			wordBonus := wordMatches * 3000
-			uniqueResults[m.Index] = m.Score + wordBonus
+			wordMatches := countWordMatches(queryWords, s.FilenamesOnly[m.Index], levBuf)
+			wordBonus := wordMatches * 800
+
+			// FFF.nvim logic: Exact filename bonus
+			filenameBonus := 0
+			if m.Exact {
+				filenameBonus += 400
+			}
+			if s.FilenamesOnly[m.Index] == queryNorm {
+				filenameBonus += 1000 // Tuyệt đối khớp file
+			}
+
+			// FFF.nvim logic: Distance Penalty
+			pathLenPenalty := len(s.Originals[m.Index]) / 5
+
+			uniqueResults[m.Index] = m.Score + wordBonus + filenameBonus - pathLenPenalty
 		} else {
 			// Với results còn lại, chỉ dùng fuzzy score
-			uniqueResults[m.Index] = m.Score
+			uniqueResults[m.Index] = m.Score - (len(s.Originals[m.Index]) / 5)
 		}
 	}
 
@@ -1223,14 +1259,14 @@ func (s *Searcher) Search(query string) []string {
 				continue
 			}
 
-			dist := LevenshteinRatio(queryNorm, targetStr1)
+			dist := LevenshteinRatio(queryNorm, targetStr1, levBuf)
 
 			// So sánh thêm 1 ký tự (phòng trường hợp typo thêm ký tự)
 			if len(nameNorm) > len(targetStr1) {
 				// Lấy prefix dài hơn 1 rune
 				targetStr2 := fastSubstring(nameNorm, queryLen+1)
 
-				d2 := LevenshteinRatio(queryNorm, targetStr2)
+				d2 := LevenshteinRatio(queryNorm, targetStr2, levBuf)
 				if d2 < dist {
 					dist = d2
 				}
@@ -1248,21 +1284,29 @@ func (s *Searcher) Search(query string) []string {
 			// Nếu điểm sai chính tả nhỏ hơn ngưỡng cho phép thì tính điểm
 			// Robust solution khi sai chính tả đi quá xa (hoặc nếu không thì mong bạn có thể mở PR hỗ trợ mình)
 			if dist <= baseThreshold {
-				score := 10000 - (dist * 100)
+				// Base score 3000
+				score := 3000 - (dist * 400)
 				runeCountName := 0
 				for range nameNorm {
 					runeCountName++
 				}
 				lenDiff := runeCountName - queryLen
 				if lenDiff > 0 {
-					score -= (lenDiff * 10)
+					score -= (lenDiff * 15) // Phạt độ dài tên
 				}
 
+				// Thưởng exact
+				if lenDiff == 0 && dist == 0 {
+					score += 1000
+				}
+
+				// Phạt độ dài đường dẫn
+				score -= len(s.Originals[i]) / 5
+
 				// Thêm word bonus cho Levenshtein matches
-				// Dùng tên file để tính word matches (không phải full path)
 				if dist < 2 {
-					wordMatches := countWordMatches(queryWords, s.FilenamesOnly[i])
-					score += wordMatches * 3000
+					wordMatches := countWordMatches(queryWords, s.FilenamesOnly[i], levBuf)
+					score += wordMatches * 800
 				}
 
 				if oldScore, exists := uniqueResults[i]; !exists || score > oldScore {

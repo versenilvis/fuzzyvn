@@ -111,7 +111,9 @@ func TestLevenshteinRatio(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		result := LevenshteinRatio(tt.s1, tt.s2)
+		levBuf := intSlicePool.Get().(*[]int)
+		result := LevenshteinRatio(tt.s1, tt.s2, levBuf)
+		intSlicePool.Put(levBuf)
 		if result != tt.expected {
 			t.Errorf("LevenshteinRatio(%q, %q) = %d, muốn %d", tt.s1, tt.s2, result, tt.expected)
 		}
@@ -718,9 +720,11 @@ func BenchmarkLevenshteinRatio(b *testing.B) {
 	}
 
 	b.ResetTimer()
+	levBuf := intSlicePool.Get().(*[]int)
+	defer intSlicePool.Put(levBuf)
 	for i := 0; i < b.N; i++ {
 		for _, p := range pairs {
-			LevenshteinRatio(p.a, p.b)
+			LevenshteinRatio(p.a, p.b, levBuf)
 		}
 	}
 }
