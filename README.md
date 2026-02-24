@@ -24,7 +24,7 @@
  <img width="1320" height="630" alt="image" src="https://github.com/user-attachments/assets/c26711db-c3cd-4d44-b03a-3915b05a03ee" />
 </div>
 
-<div align="center"><i>Bạn có thể test qua phần <a href="https://github.com/verse91/fuzzyvn/tree/main/demo">demo</a></i></div>
+<div align="center"><i>Bạn có thể test qua phần <a href="https://github.com/versenilvis/fuzzyvn/tree/main/demo">demo</a></i></div>
 
 ## Tính năng
 
@@ -38,7 +38,7 @@
 ## Cài đặt
 
 ```bash
-go get github.com/verse91/fuzzyvn
+go get github.com/versenilvis/fuzzyvn
 ```
 
 **Yêu cầu**: Go 1.21+
@@ -47,105 +47,117 @@ go get github.com/verse91/fuzzyvn
 
 ## Benchmark
 > [!NOTE]
-> Benchmark trên laptop thường với AMD Ryzen 7 PRO 7840HS (16 threads)  
+> Benchmark chạy trên Google Cloud VM (N2-Standard-2, Intel® Xeon® 2.80 GHz, 2 vCPU, 8 GB RAM).
+
+| Operation                  | Time        | Memory | Notes                            |
+| -------------------------- | ----------- | ------ | -------------------------------- |
+| NewSearcher                | **0.282ms** | 330KB  | Build index (synthetic 1K files) |
+| Search 100 files           | **23µs**    | 27KB   | Synthetic                        |
+| Search 1K files            | **203µs**   | 74KB   | Synthetic                        |
+| Search 10K files           | **3.50ms**  | 191KB  | Synthetic (1 outlier)            |
+| Search 50K files           | **20.95ms** | 338KB  | Real dataset                     |
+| Search 100K files          | **41.74ms** | 720KB  | Real dataset                     |
+| Search 100K files, typo    | **44.26ms** | 652KB  | Fuzzy match                      |
+| Vietnamese with accents    | **395µs**   | 52KB   | Normalize + match                |
+| Vietnamese without accents | **394µs**   | 52KB   | Normalize + match                |
+| Search with cache          | **208µs**   | 73KB   | Boost ranking                    |
+| Normalize                  | **1.28µs**  | 112B   | 9 allocs                         |
+| LevenshteinRatio           | **307ns**   | 0B     | Zero allocation                  |
+| RecordSelection            | **372ns**   | 29B    | 2 allocs                         |
+| GetBoostScores             | **33.6µs**  | 9.8KB  | 207 allocs                       |
 
 ```bash
-Search 'son tung' trong 99989 files... tìm thấy 20 kết quả trong 37.888441ms
-Search 'ky niem' trong 99989 files... tìm thấy 20 kết quả trong 26.357698ms
-Search 'lac troi' trong 99989 files... tìm thấy 20 kết quả trong 40.836726ms
-
---- Benchmark Info ---
-Đã load 99989 files từ ổ cứng
-----------------------
-goos: linux
-goarch: amd64
-pkg: github.com/verse91/fuzzyvn
-cpu: AMD Ryzen 7 PRO 7840HS w/ Radeon 780M Graphics
-BenchmarkSearch_RealWorld/Search/50k_Files-16         	      92	  15557357 ns/op	  343214 B/op	     145 allocs/op
-BenchmarkSearch_RealWorld/Search/100k_Files-16        	      44	  31174767 ns/op	  672070 B/op	     147 allocs/op
-BenchmarkSearch_RealWorld/Search/100K_Files_Typo-16   	      42	  30774376 ns/op	  571255 B/op	     145 allocs/op
-BenchmarkNewSearcher-16                               	     276	   4451109 ns/op	17656051 B/op	   13012 allocs/op
-BenchmarkSearch/100_files-16                          	   31237	     34480 ns/op	   48067 B/op	      63 allocs/op
-BenchmarkSearch/1000_files-16                         	    4270	    244585 ns/op	   59499 B/op	     180 allocs/op
-BenchmarkSearch/10000_files-16                        	     348	   3206680 ns/op	  294490 B/op	    1156 allocs/op
-BenchmarkSearchVietnamese/tiếng_Việt_có_dấu-16        	    2325	    448315 ns/op	   83341 B/op	     189 allocs/op
-BenchmarkSearchVietnamese/tiếng_Việt_không_dấu-16                	    2930	    406990 ns/op	   82171 B/op	     185 allocs/op
-BenchmarkSearchWithCache-16                                      	    5784	    256214 ns/op	   59745 B/op	     183 allocs/op
-BenchmarkNormalize-16                                            	   74586	     15714 ns/op	   46152 B/op	      39 allocs/op
-BenchmarkLevenshteinRatio-16                                     	 4596138	       309.3 ns/op	       0 B/op	       0 allocs/op
-BenchmarkRecordSelection-16                                      	  486788	      2485 ns/op	    8789 B/op	       8 allocs/op
-BenchmarkGetBoostScores-16                                       	   36902	     31686 ns/op	   18856 B/op	     213 allocs/op
-PASS
-ok  	github.com/verse91/fuzzyvn	27.924s
-```
-
-| Operation                  | Time    | Memory  | Notes             |
-| -------------------------- | ------- | ------- | ----------------- |
-| NewSearcher                | 4.45ms  | 16.84MB | Load 99,989 files |
-| Search 100 files           | 34µs    | 46KB    |                   |
-| Search 1K files            | 245µs   | 58KB    |                   |
-| Search 10K files           | 3.20ms  | 287KB   |                   |
-| Search 50K files           | 15.56ms | 335KB   | Bình thường       |
-| Search 100K files          | 31.17ms | 656KB   | Bình thường       |
-| Search 100K files, typo    | 30.77ms | 558KB   | Sai chính tả      |
-| Vietnamese with accents    | 448µs   | 81KB    |                   |
-| Vietnamese without accents | 407µs   | 80KB    |                   |
-| Search with cache          | 256µs   | 58KB    |                   |
-| Normalize                  | 15.7µs  | 45KB    |                   |
-| LevenshteinRatio           | 309ns   | 0B      | Zero allocation   |
-| RecordSelection            | 2.48µs  | 8.6KB   |                   |
-| GetBoostScores             | 31.7µs  | 18KB    |                   |
-
-
-```bash
-go test -bench=BenchmarkSearch -benchmem
+GOMAXPROCS=1 taskset -c 1 go test -run=^$ -bench=. -benchmem -benchtime=5s -count=5
 ```
 hoặc
 ```bash
 make bench
 ```
+*Make bench không ổn định cho nhiều lần test liên tục, nếu bạn chỉ cần quan tâm test 1 lần*
 
-### Luồng tìm kiếm
-
-```
-              Query người dùng
-                      ↓
-        Normalize (bỏ dấu, lowercase)
-                      ↓
-┌─────────────┬──────────────┬─────────────┐
-│ Fuzzy Match │ Levenshtein  │ Cache Boost │
-│ (substring) │ (sửa lỗi gõ) │ (lịch sử)   │
-└─────────────┴──────────────┴─────────────┘
-                      ↓
-              Tính điểm tổng hợp
-                      ↓
-               Sắp xếp theo điểm
-                      ↓
-                Top 20 kết quả
-```
-
-## Kiến trúc
+<details>
+	<summary>Full benchmark</summary>
 
 ```
-┌─────────────────────────────────────────┐
-│                Searcher                 │
-├─────────────────────────────────────────┤
-│ Originals[]     - File paths gốc        │
-│ Normalized[]    - Đã normalize          │
-│ FilenamesOnly[] - Chỉ tên file          │
-│ Cache          - QueryCache             │
-└─────────────────────────────────────────┘
-                     ↓
-┌─────────────────────────────────────────┐
-│                QueryCache               │
-├─────────────────────────────────────────┤
-│ entries{}      - query → CacheEntry[]   │
-│ queryOrder[]   - LRU tracking           │
-│ maxQueries     - Limit (100)            │
-│ maxPerQuery    - Files per query (5)    │
-│ boostScore     - Boost factor (5000)    │
-└─────────────────────────────────────────┘
+--- Benchmark Info ---
+Đã load 99992 files từ ổ cứng
+----------------------
+goos: linux
+goarch: amd64
+pkg: github.com/versenilvis/fuzzyvn
+cpu: Intel(R) Xeon(R) CPU @ 2.80GHz
+BenchmarkSearch_RealWorld/Search/50k_Files                   286          20856288 ns/op          345724 B/op         50 allocs/op
+BenchmarkSearch_RealWorld/Search/50k_Files                   288          20804539 ns/op          345720 B/op         50 allocs/op
+BenchmarkSearch_RealWorld/Search/50k_Files                   285          20930813 ns/op          345720 B/op         50 allocs/op
+BenchmarkSearch_RealWorld/Search/50k_Files                   285          20952578 ns/op          345720 B/op         50 allocs/op
+BenchmarkSearch_RealWorld/Search/50k_Files                   286          20918743 ns/op          345720 B/op         50 allocs/op
+BenchmarkSearch_RealWorld/Search/100k_Files                  144          41576191 ns/op          736920 B/op         53 allocs/op
+BenchmarkSearch_RealWorld/Search/100k_Files                  144          41627880 ns/op          736920 B/op         53 allocs/op
+BenchmarkSearch_RealWorld/Search/100k_Files                  142          41723329 ns/op          736920 B/op         53 allocs/op
+BenchmarkSearch_RealWorld/Search/100k_Files                  142          41736543 ns/op          736920 B/op         53 allocs/op
+BenchmarkSearch_RealWorld/Search/100k_Files                  142          41683405 ns/op          736920 B/op         53 allocs/op
+BenchmarkSearch_RealWorld/Search/100K_Files_Typo             135          44145793 ns/op          667912 B/op         52 allocs/op
+BenchmarkSearch_RealWorld/Search/100K_Files_Typo             135          44065497 ns/op          667912 B/op         52 allocs/op
+BenchmarkSearch_RealWorld/Search/100K_Files_Typo             135          44135146 ns/op          667912 B/op         52 allocs/op
+BenchmarkSearch_RealWorld/Search/100K_Files_Typo             134          44219059 ns/op          667912 B/op         52 allocs/op
+BenchmarkSearch_RealWorld/Search/100K_Files_Typo             134          44264621 ns/op          667912 B/op         52 allocs/op
+BenchmarkNewSearcher                                       21714            280562 ns/op          330736 B/op       2013 allocs/op
+BenchmarkNewSearcher                                       21277            281646 ns/op          330736 B/op       2013 allocs/op
+BenchmarkNewSearcher                                       21171            280012 ns/op          330736 B/op       2013 allocs/op
+BenchmarkNewSearcher                                       21564            277925 ns/op          330736 B/op       2013 allocs/op
+BenchmarkNewSearcher                                       21510            278624 ns/op          330736 B/op       2013 allocs/op
+BenchmarkSearch/100_files                                 260863             23076 ns/op           27040 B/op         28 allocs/op
+BenchmarkSearch/100_files                                 262005             22977 ns/op           27040 B/op         28 allocs/op
+BenchmarkSearch/100_files                                 255213             23098 ns/op           27040 B/op         28 allocs/op
+BenchmarkSearch/100_files                                 261056             23025 ns/op           27040 B/op         28 allocs/op
+BenchmarkSearch/100_files                                 261691             23007 ns/op           27040 B/op         28 allocs/op
+BenchmarkSearch/1000_files                                 29988            202229 ns/op           74224 B/op        144 allocs/op
+BenchmarkSearch/1000_files                                 29415            203169 ns/op           74224 B/op        144 allocs/op
+BenchmarkSearch/1000_files                                 29596            202583 ns/op           74224 B/op        144 allocs/op
+BenchmarkSearch/1000_files                                 29707            202075 ns/op           74224 B/op        144 allocs/op
+BenchmarkSearch/1000_files                                 29800            200921 ns/op           74224 B/op        144 allocs/op
+BenchmarkSearch/10000_files                                 2053           2925966 ns/op          195672 B/op       1050 allocs/op
+BenchmarkSearch/10000_files                                 2040           2927483 ns/op          195672 B/op       1050 allocs/op
+BenchmarkSearch/10000_files                                 2026           3496008 ns/op          195672 B/op       1050 allocs/op
+BenchmarkSearch/10000_files                                 2053           2920354 ns/op          195672 B/op       1050 allocs/op
+BenchmarkSearch/10000_files                                 2032           2940439 ns/op          195672 B/op       1050 allocs/op
+BenchmarkSearchVietnamese/tiếng_Việt_có_dấu                15255            393876 ns/op           53744 B/op        145 allocs/op
+BenchmarkSearchVietnamese/tiếng_Việt_có_dấu                15200            394326 ns/op           53744 B/op        145 allocs/op
+BenchmarkSearchVietnamese/tiếng_Việt_có_dấu                15199            394632 ns/op           53744 B/op        145 allocs/op
+BenchmarkSearchVietnamese/tiếng_Việt_có_dấu                15228            394102 ns/op           53744 B/op        145 allocs/op
+BenchmarkSearchVietnamese/tiếng_Việt_có_dấu                15255            393487 ns/op           53744 B/op        145 allocs/op
+BenchmarkSearchVietnamese/tiếng_Việt_không_dấu                     15254            393289 ns/op           53712 B/op        141 allocs/op
+BenchmarkSearchVietnamese/tiếng_Việt_không_dấu                     15288            392234 ns/op           53712 B/op        141 allocs/op
+BenchmarkSearchVietnamese/tiếng_Việt_không_dấu                     15238            394197 ns/op           53712 B/op        141 allocs/op
+BenchmarkSearchVietnamese/tiếng_Việt_không_dấu                     15270            392448 ns/op           53712 B/op        141 allocs/op
+BenchmarkSearchVietnamese/tiếng_Việt_không_dấu                     15207            394116 ns/op           53712 B/op        141 allocs/op
+BenchmarkSearchWithCache                                           29049            208234 ns/op           74464 B/op        147 allocs/op
+BenchmarkSearchWithCache                                           28693            208742 ns/op           74464 B/op        147 allocs/op
+BenchmarkSearchWithCache                                           28744            206947 ns/op           74464 B/op        147 allocs/op
+BenchmarkSearchWithCache                                           29205            206766 ns/op           74464 B/op        147 allocs/op
+BenchmarkSearchWithCache                                           29156            205548 ns/op           74464 B/op        147 allocs/op
+BenchmarkNormalize                                               4723686              1270 ns/op             112 B/op          9 allocs/op
+BenchmarkNormalize                                               4719566              1272 ns/op             112 B/op          9 allocs/op
+BenchmarkNormalize                                               4702352              1276 ns/op             112 B/op          9 allocs/op
+BenchmarkNormalize                                               4720912              1271 ns/op             112 B/op          9 allocs/op
+BenchmarkNormalize                                               4632069              1280 ns/op             112 B/op          9 allocs/op
+BenchmarkLevenshteinRatio                                       19559318               306.7 ns/op             0 B/op          0 allocs/op
+BenchmarkLevenshteinRatio                                       19470264               307.2 ns/op             0 B/op          0 allocs/op
+BenchmarkLevenshteinRatio                                       18950019               307.6 ns/op             0 B/op          0 allocs/op
+BenchmarkLevenshteinRatio                                       19590055               305.9 ns/op             0 B/op          0 allocs/op
+BenchmarkLevenshteinRatio                                       19526402               306.4 ns/op             0 B/op          0 allocs/op
+BenchmarkRecordSelection                                        16344829               367.0 ns/op            29 B/op          2 allocs/op
+BenchmarkRecordSelection                                        16391042               367.3 ns/op            29 B/op          2 allocs/op
+BenchmarkRecordSelection                                        16248507               368.4 ns/op            29 B/op          2 allocs/op
+BenchmarkRecordSelection                                        16292912               368.6 ns/op            29 B/op          2 allocs/op
+BenchmarkRecordSelection                                        16262018               372.2 ns/op            29 B/op          2 allocs/op
+BenchmarkGetBoostScores                                           192088             32470 ns/op           10088 B/op        207 allocs/op
+BenchmarkGetBoostScores                                           177350             33597 ns/op           10088 B/op        207 allocs/op
+BenchmarkGetBoostScores                                           183049             33521 ns/op           10088 B/op        207 allocs/op
+BenchmarkGetBoostScores                                           176958             33535 ns/op           10088 B/op        207 allocs/op
+BenchmarkGetBoostScores                                           178576             33578 ns/op           10088 B/op        207 allocs/op
 ```
+</details>
 
 ## Nếu bạn muốn tự phát triển
 
@@ -191,7 +203,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/verse91/fuzzyvn"
+	"github.com/versenilvis/fuzzyvn"
 )
 
 func main() {
@@ -288,7 +300,7 @@ results = searcher.Search("mai")  // Gõ sai, vẫn lên đầu nhờ cache
   <summary><b>Ví dụ với HTTP Server</b></summary>
 <br>
 
-Xem ví dụ ở [demo](https://github.com/verse91/fuzzyvn/tree/main/demo)
+Xem ví dụ ở [demo](https://github.com/versenilvis/fuzzyvn/tree/main/demo)
 </details>
 
 ## Tài liệu
@@ -356,46 +368,6 @@ distance := fuzzyvn.LevenshteinRatio("hello", "helo")
 
 // Fuzzy find trong slice
 matches := fuzzyvn.FuzzyFind("pattern", targets)
-```
-
-## Cách hoạt động
-
-### Điểm số (Scoring)
-<div align="center">
- <img width="70%" width="1414" height="1425" alt="image" src="https://github.com/user-attachments/assets/9266cc9a-1b06-491f-ab17-2f0cbd9dcabb" />
-</div>
-
-Mỗi kết quả nhận điểm từ nhiều nguồn:
-
-1. **Fuzzy Score** (0-1000+)
-   - Đầu từ (word start): +80
-   - Match liên tiếp (consecutive): +40
-   - Match thường: +10
-   - Phạt độ dài: -(lenT - lenP)
-
-2. **Word Bonus** (0-9000+)
-   - +3000 cho mỗi từ khớp hoàn toàn
-   - Cho phép 1 lỗi với từ ≥3 ký tự
-
-3. **Levenshtein Score** (0-10000)
-   - Cho phép ~33% lỗi
-   - 10000 - (lỗi × 100)
-
-4. **Cache Boost** (0-10000+)
-   - Dựa trên số lần chọn
-   - Độ tương đồng query
-   - Công thức: `(boostScore × similarity × selectCount) / 100`
-
-### Cache System
-<div align="center">
- <img width="70%" width="1379" height="1406" alt="image" src="https://github.com/user-attachments/assets/d874a0a8-8642-4d3b-a35c-2c44bb0d9647" />
-</div>
-Cache hoạt động theo cơ chế LRU (Least Recently Used):
-
-```go
-// Mỗi query lưu tối đa 5 files
-// Mỗi file có selectCount (số lần chọn)
-// Query có độ tương đồng cao được tận dụng cache
 ```
 
 **Ví dụ**:
