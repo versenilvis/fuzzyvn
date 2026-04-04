@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/verse91/fuzzyvn"
+	"github.com/versenilvis/fuzzyvn"
 )
 
 //go:embed index.html
