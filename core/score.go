@@ -5,15 +5,34 @@ import (
 )
 
 /*
+isEntryPoint: Kiểm tra xem filename có phải là file khởi đầu quan trọng không
+*/
+func isEntryPoint(filename string) bool {
+	switch filename {
+	case "mod.rs", "lib.rs", "main.rs", // Rust
+		"index.js", "index.jsx", "index.ts", "index.tsx", "index.mjs", "index.cjs", // JS/TS
+		"index.vue", "App.vue", // Vue
+		"index.html",                            // Web
+		"__init__.py", "__main__.py", "main.py", // Python
+		"main.go",                      // Go
+		"main.c", "main.cpp", "main.h", // C/C++
+		"index.php",           // PHP
+		"main.rb", "index.rb", // Ruby
+		"Main.java", "Application.java", // Java
+		"main.swift", // Swift
+		"main.dart":  // Dart/Flutter
+		return true
+	}
+	return false
+}
+
+/*
 fuzzyScoreGreedy: Tính điểm fuzzy match sử dụng thuật toán tham lam
 - pattern: Query đã normalize
 - target: Target string đã normalize
-- Trả về: (matched bool, score int, positions []int)
-- Cách này có 1 vấn đề nho nhỏ, là do tham lam
-- Nó có thể bỏ qua một match tốt hơn ở sau để chọn match đầu tiên tìm được
-- Nhưng bù lại cực nhanh vì chỉ duyệt target 1 lần
+- baseStart: Vị trí bắt đầu của filename trong target
 */
-func fuzzyScoreGreedy(pattern []byte, target []byte) (int, bool) {
+func fuzzyScoreGreedy(pattern []byte, target []byte, baseStart int) (int, bool) {
 	lenP := len(pattern)
 	lenT := len(target)
 
@@ -22,151 +41,84 @@ func fuzzyScoreGreedy(pattern []byte, target []byte) (int, bool) {
 	}
 
 	totalScore := 0
-
-	// file name và dir
-	baseStart := 0
-	for i := lenT - 1; i >= 0; i-- {
-		if target[i] == '/' || target[i] == '\\' {
-			baseStart = i + 1
-			break
-		}
-	}
-
-	// Index của ký tự khớp trước đó trong target
-	prevMatchIdx := -1
-
-	// Index hiện tại đang xét trong target
-	targetIdx := 0
-
+	patternIdx := 0
+	firstMatchIdx := -1
 	lastMatchIdx := -1
 
-	// Bounds Check Elimination (BCE) hints:
-	// Giúp Go compiler bỏ qua thao tác kiểm tra an toàn tràn mảng (bounds check)
-	_ = target[lenT-1]
-	_ = pattern[lenP-1]
+	// Duyệt 1 lần duy nhất qua target
+	for i, char := range target {
+		if patternIdx < lenP && char == pattern[patternIdx] {
+			if firstMatchIdx == -1 {
+				firstMatchIdx = i
+			}
+			lastMatchIdx = i
 
-	for pIdx := 0; pIdx < lenP; pIdx++ {
-		pChar := pattern[pIdx]
-		found := false
-
-		bestScore := -1
-		bestIdx := -1
-
-		// GREEDY LOOK-AHEAD:
-		// Thay vì lấy ngay ký tự tìm thấy đầu tiên, ta quét hết phần còn lại
-		// để tìm xem có ký tự nào ngon hơn không (ví dụ: đầu từ)
-		// Tuy nhiên quét hết thì chậm O(n*m).
-		// Ta dùng chiến thuật: Tìm ký tự đầu tiên -> Lưu lại
-		// Nếu nó KHÔNG PHẢI đầu từ, thì ráng tìm tiếp xem có cái nào là đầu từ không
-
-		for t := targetIdx; t < lenT; t++ {
-			tChar := target[t]
-
-			if tChar == pChar {
-				// Tính điểm sơ bộ cho vị trí này
-				score := 0
-
-				// Thưởng đầu từ
-				// Ký tự là đầu từ nếu: nó là ký tự đầu tiên OR ký tự trước nó là dấu ngăn cách
-				isWordStart := false
-				if t == 0 {
+			// Bonus điểm nếu khớp ký tự đầu từ
+			isWordStart := false
+			if i == 0 {
+				isWordStart = true
+			} else {
+				prev := target[i-1]
+				if prev == '/' || prev == '\\' || prev == '_' || prev == '-' || prev == '.' || prev == ' ' {
 					isWordStart = true
-				} else {
-					prevChar := target[t-1]
-					// Check separator: dấu cách, _, -, /, .
-					if isSeparator(rune(prevChar)) {
-						isWordStart = true
-					} else if unicode.IsLower(rune(prevChar)) && unicode.IsUpper(rune(tChar)) {
-						// Tính năng này có thể hơi mờ nhạt nếu target đã bị ToLower() ở vòng ngoài,
-						// nhưng giữ lại để phòng hờ trường hợp dùng mảng nguyên bản.
-						isWordStart = true
-					}
-				}
-
-				if isWordStart {
-					score += 80 // Thưởng đậm cho đầu từ
-				} else {
-					score += 10 // Điểm cơ bản
-				}
-
-				// Thưởng liền kề
-				if prevMatchIdx != -1 && t == prevMatchIdx+1 {
-					score += 40 // Thưởng cho việc gõ liền mạch
-				}
-
-				// Phạt khoảng cách
-				// Logic: Càng xa ký tự trước càng trừ điểm
-				/* Phần này làm Greedy phức tạp, ở đây ta đơn giản hóa:
-				   Nếu tìm thấy WordStart -> CHỐT LUÔN (Greedy lấy cái tốt nhất)
-				   Nếu tìm thấy ký tự thường -> Lưu tạm, tìm tiếp xem có WordStart không
-				*/
-
-				if isWordStart {
-					bestScore = score
-					bestIdx = t
-					found = true
-					break // Tìm thấy WordStart -> Chốt lệnh 
-				}
-
-				// Nếu chưa có
-				if bestIdx == -1 {
-					bestScore = score
-					bestIdx = t
-					found = true
+				} else if unicode.IsLower(rune(prev)) && unicode.IsUpper(rune(target[i])) {
+					isWordStart = true
 				}
 			}
+
+			if isWordStart {
+				totalScore += 80
+			} else {
+				totalScore += 10
+			}
+
+			// Bonus nếu khớp trong phần tên file
+			if i < baseStart {
+				totalScore += 15
+			}
+
+			patternIdx++
 		}
-
-		if !found {
-			return 0, false // Không tìm thấy ký tự pattern
-		}
-
-		totalScore += bestScore
-		prevMatchIdx = bestIdx
-		lastMatchIdx = bestIdx
-		targetIdx = bestIdx + 1
 	}
 
-	// Penalty khoảng cách tổng thể nếu độ dài pattern quá ngắn so với target
-	lenDiff := lenT - lenP
-	if lenDiff > 0 {
-		totalScore -= lenDiff * 2
+	// Nếu không khớp hết Query -> Loại
+	if patternIdx != lenP {
+		return 0, false
 	}
 
-	// Thưởng điểm dựa vào file base
-	// Tách luồng điểm thư mục và tên file để ưu tiên những kết quả tiệm cận với tên file
-	
-	isFilenameMatch := false
-	if lastMatchIdx >= baseStart {
-		isFilenameMatch = true
+	// Tính điểm cơ bản
+	// Match càng gọn (khoảng cách đầu-cuối ngắn) thì điểm càng cao
+	matchRange := lastMatchIdx - firstMatchIdx + 1
+	if matchRange < lenP {
+		matchRange = lenP
 	}
+	baseScore := (lenP * 100) - (matchRange-lenP)*5
+	if baseScore < 0 {
+		baseScore = 0
+	}
+	totalScore += baseScore
 
-	baseName := target[baseStart:]
-	isExactFilename := false
-	
-	if len(baseName) == lenP {
-		isExactFilename = true
-		for i := range baseName {
-			if baseName[i] != pattern[i] {
-				isExactFilename = false
+	// Khớp chính xác tên file -> Điểm cao
+	// filename nằm ở [0, baseStart) trong target
+	if baseStart == lenP {
+		isExactBase := true
+		for i, char := range target[:lenP] {
+			if char != pattern[i] {
+				isExactBase = false
 				break
 			}
 		}
-	}
-
-	if isExactFilename {
-		// bonus 40% điểm nếu match chính xác cái tên file 
-		// ví dụ: gõ "user.go" tìm ra đúng "/src/models/user.go"
-		totalScore += (totalScore * 40) / 100
-	} else if isFilenameMatch {
-		// bonus 16% điểm nếu ký tự match cuối cùng nằm bên trong phần tên file
-		// ví dụ gõ "usgo" na ná với "user.go" -> ưu tiên hơn so với nằm ở thư mục "usgo/main.ts"
+		if isExactBase {
+			// Bonus 40% nếu khớp chính xác tên file
+			totalScore += (totalScore * 40) / 100
+		}
+	} else if firstMatchIdx < baseStart {
+		// Bonus 16% nếu có ít nhất 1 match trong phần filename
 		totalScore += (totalScore * 16) / 100
 	} else {
-		// nếu kết quả rơi vào phần dir, kiểm tra xem có phải là file đặc biệt thường dùng không
-		strBase := string(baseName)
-		if isEntryPoint(strBase) {
-			// bonus 5% cho các entry point
+		// Chỉ match ở phần path -> check entry point
+		filename := string(target[:baseStart])
+		if isEntryPoint(filename) {
 			totalScore += (totalScore * 5) / 100
 		}
 	}
