@@ -12,6 +12,7 @@ import (
 	"sync"
 
 	"github.com/versenilvis/fuzzyvn"
+	"github.com/versenilvis/fuzzyvn/core"
 )
 
 //go:embed index.html
@@ -20,7 +21,7 @@ var challengeHTML string
 var (
 	searcher     *fuzzyvn.Searcher
 	searcherLock sync.RWMutex
-	globalCache  *fuzzyvn.QueryCache
+	globalMemory *core.FileMemory
 )
 
 type SearchResult struct {
@@ -30,19 +31,13 @@ type SearchResult struct {
 }
 
 type SearchResponse struct {
-	CachedFiles []string       `json:"cached_files"`
+	RecentFiles []string       `json:"recent_files"`
 	Results     []SearchResult `json:"results"`
 }
 
 type SelectionRequest struct {
 	Query string `json:"query"`
 	Path  string `json:"path"`
-}
-
-type CacheInfo struct {
-	Size          int      `json:"size"`
-	RecentQueries []string `json:"recent_queries"`
-	RecentFiles   []string `json:"recent_files"`
 }
 
 func handleHome(w http.ResponseWriter, r *http.Request) {
@@ -70,25 +65,25 @@ func indexFiles(rootPath string) {
 	}
 
 	var newSearcher *fuzzyvn.Searcher
-	if globalCache != nil {
-		newSearcher = fuzzyvn.NewSearcherWithCache(tempFiles, globalCache)
+	if globalMemory != nil {
+		newSearcher = fuzzyvn.NewSearcherWithMemory(tempFiles, globalMemory)
 	} else {
 		newSearcher = fuzzyvn.NewSearcher(tempFiles)
-		globalCache = newSearcher.GetCache()
+		globalMemory = newSearcher.Memory
 	}
 
 	searcherLock.Lock()
 	searcher = newSearcher
 	searcherLock.Unlock()
 
-	fmt.Printf("Indexed %d files. Cache: %d queries\n", len(tempFiles), globalCache.Size())
+	fmt.Printf("Indexed %d files\n", len(tempFiles))
 }
 
 func search(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query().Get("q")
 	if query == "" {
 		json.NewEncoder(w).Encode(SearchResponse{
-			CachedFiles: []string{},
+			RecentFiles: []string{},
 			Results:     []SearchResult{},
 		})
 		return
@@ -99,52 +94,29 @@ func search(w http.ResponseWriter, r *http.Request) {
 
 	if searcher == nil {
 		json.NewEncoder(w).Encode(SearchResponse{
-			CachedFiles: []string{},
+			RecentFiles: []string{},
 			Results:     []SearchResult{},
 		})
 		return
 	}
 
-	var cachedFiles []string
-	if searcher.Cache != nil {
-		cachedFiles = searcher.Cache.GetCachedFiles(query, 5)
-	}
-
-	var boostedFiles map[string]int
-	if searcher.Cache != nil {
-		boostedFiles = searcher.Cache.GetBoostScores(query)
-	}
-
+	recentFiles := globalMemory.GetRecentFiles(5)
+	boostedFiles := globalMemory.GetBoostScores(query)
 	matchedStrings := searcher.Search(query)
 
-	cachedSet := make(map[string]bool)
-	for _, f := range cachedFiles {
-		cachedSet[f] = true
-	}
-
 	results := []SearchResult{}
-	maxRes := 20
-
 	for _, str := range matchedStrings {
-		if cachedSet[str] {
-			continue
-		}
-
 		_, isBoosted := boostedFiles[str]
 		results = append(results, SearchResult{
 			Path:    str,
 			Score:   0,
 			Boosted: isBoosted,
 		})
-
-		if len(results) >= maxRes {
-			break
-		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(SearchResponse{
-		CachedFiles: cachedFiles,
+		RecentFiles: recentFiles,
 		Results:     results,
 	})
 }
@@ -172,33 +144,12 @@ func recordSelection(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
 
-func cacheInfo(w http.ResponseWriter, r *http.Request) {
-	searcherLock.RLock()
-	defer searcherLock.RUnlock()
-
-	info := CacheInfo{
-		Size:          0,
-		RecentQueries: []string{},
-		RecentFiles:   []string{},
-	}
-
-	if globalCache != nil {
-		info.Size = globalCache.Size()
-		info.RecentQueries = globalCache.GetRecentQueries(10)
-		info.RecentFiles = globalCache.GetAllRecentFiles(5)
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(info)
-}
-
 func main() {
 	go indexFiles("./test_data")
 
 	http.HandleFunc("/", handleHome)
 	http.HandleFunc("/search", search)
 	http.HandleFunc("/record-selection", recordSelection)
-	http.HandleFunc("/cache-info", cacheInfo)
 
 	fmt.Println("Server running at http://localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
