@@ -1,0 +1,48 @@
+Search 'son tung' trong 99993 files... tìm thấy 20 kết quả trong 1.923752ms
+Search 'ky niem' trong 99993 files... tìm thấy 20 kết quả trong 680.042µs
+Search 'lac troi' trong 99993 files... tìm thấy 20 kết quả trong 1.270049ms
+
+--- Linux Benchmark Check ---
+Total files scanned: 100000
+Sample (first 10 files):
+  [1] /usr/bin/2to3-3.12
+  [2] /usr/bin/411toppm
+  [3] /usr/bin/7z
+  [4] /usr/bin/7za
+  [5] /usr/bin/7zr
+  [6] /usr/bin/AppImageLauncher
+  [7] /usr/bin/AppImageLauncherSettings
+  [8] /usr/bin/FileCheck
+  [9] /usr/bin/FileCheck-21
+  [10] /usr/bin/Hyprland
+-----------------------------
+goos: linux
+goarch: amd64
+pkg: github.com/versenilvis/fuzzyvn
+cpu: AMD Ryzen 7 PRO 7840HS w/ Radeon 780M Graphics
+BenchmarkLinux100k/ascii_short-16    	     362	   3636315 ns/op	 3446616 B/op	     877 allocs/op
+BenchmarkLinux100k/ascii_ext-16      	     326	   3879254 ns/op	 2712972 B/op	     285 allocs/op
+BenchmarkLinux100k/path_like-16      	     253	   4320304 ns/op	 3428283 B/op	     428 allocs/op
+BenchmarkLinux100k/typo-16           	     343	   3895879 ns/op	 3433412 B/op	     876 allocs/op
+BenchmarkLinux100k/long_query-16     	     282	   4609871 ns/op	 3419571 B/op	     115 allocs/op
+BenchmarkLinux100k_NewSearcher-16    	      15	  80225625 ns/op	47503058 B/op	  504141 allocs/op
+
+--- Benchmark Info ---
+Đã load 99993 files từ ổ cứng
+----------------------
+BenchmarkSearch_RealWorld/Search/50k_Files-16         	    1809	    724730 ns/op	  247947 B/op	     865 allocs/op
+BenchmarkSearch_RealWorld/Search/100k_Files-16        	     928	   1555012 ns/op	  615489 B/op	     868 allocs/op
+BenchmarkSearch_RealWorld/Search/100K_Files_Typo-16   	     744	   1442834 ns/op	  603291 B/op	     868 allocs/op
+BenchmarkNewSearcher-16                               	    1506	    705888 ns/op	  369126 B/op	    5305 allocs/op
+BenchmarkSearch/100_files-16                          	  184375	      6414 ns/op	    9803 B/op	      35 allocs/op
+BenchmarkSearch/1000_files-16                         	   36225	     32771 ns/op	   12146 B/op	      56 allocs/op
+BenchmarkSearch/10000_files-16                        	    6199	    188483 ns/op	  113129 B/op	     862 allocs/op
+BenchmarkSearchVietnamese/tiếng_Việt_có_dấu-16        	   27790	     39684 ns/op	   12148 B/op	      56 allocs/op
+BenchmarkSearchVietnamese/tiếng_Việt_không_dấu-16                	   31723	     41704 ns/op	   12147 B/op	      56 allocs/op
+BenchmarkSearchWithCache-16                                      	   32752	     36836 ns/op	   12467 B/op	      61 allocs/op
+BenchmarkNormalize-16                                            	 1000000	      1116 ns/op	      80 B/op	       5 allocs/op
+BenchmarkLevenshteinRatio-16                                     	 3150100	       379.8 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRecordSelection-16                                      	  326624	      3634 ns/op	      90 B/op	       4 allocs/op
+BenchmarkGetBoostScores-16                                       	   70266	     22347 ns/op	    6965 B/op	      12 allocs/op
+PASS
+ok  	github.com/versenilvis/fuzzyvn	28.258s
