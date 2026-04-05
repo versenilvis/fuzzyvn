@@ -8,33 +8,11 @@ import (
 	"golang.org/x/text/unicode/norm"
 )
 
-func abs(x int) int {
-	if x < 0 {
-		return -x
-	}
-	return x
-}
-
-func isSeparator(r rune) bool {
-	// Liệt kê các ký tự ngăn cách phổ biến trong code/path
-	return r == '/' || r == '\\' || r == '_' || r == '-' || r == '.' || r == ' ' || r == ':'
-}
-
-func isEntryPoint(filename string) bool {
-	switch filename {
-	case "mod.rs", "lib.rs", "main.rs", // Rust
-		"index.js", "index.jsx", "index.ts", "index.tsx", "index.mjs", "index.cjs", // JS/TS
-		"index.vue", "App.vue", // Vue
-		"index.html",                            // Web
-		"__init__.py", "__main__.py", "main.py", // Python
-		"main.go",                      // Go
-		"main.c", "main.cpp", "main.h", // C/C++
-		"index.php",           // PHP
-		"main.rb", "index.rb", // Ruby
-		"Main.java", "Application.java", // Java
-		"main.swift", // Swift
-		"main.dart":  // Dart/Flutter
-		return true
+func HasUpperCase(s string) bool {
+	for i := range s {
+		if s[i] >= 'A' && s[i] <= 'Z' {
+			return true
+		}
 	}
 	return false
 }
@@ -43,33 +21,10 @@ func CountWordMatches(queryWords []string, target string) int {
 	if len(target) < 2 {
 		return 0
 	}
-	targetWords := strings.FieldsFunc(target, isSeparator)
-	if len(targetWords) == 0 {
-		return 0
-	}
 	count := 0
-	for _, qWord := range queryWords {
-		if len(qWord) < 2 {
-			continue
-		}
-		for _, tWord := range targetWords {
-			if len(tWord) < 2 {
-				continue
-			}
-			// Exact match
-			if qWord == tWord {
-				count++
-				break
-			}
-			// Fuzzy match: cho phép 1 lỗi nếu từ >= 3 ký tự
-			// CHỈ check Levenshtein nếu độ dài gần bằng nhau
-			if len(qWord) >= 3 && len(tWord) >= 3 && abs(len(qWord)-len(tWord)) <= 1 {
-				dist := LevenshteinRatio(qWord, tWord)
-				if dist <= 1 {
-					count++
-					break
-				}
-			}
+	for _, word := range queryWords {
+		if len(word) >= 2 && strings.Contains(target, word) {
+			count++
 		}
 	}
 	return count
@@ -79,20 +34,26 @@ func Normalize(s string) string {
 	// Nếu toàn là ASCII (Tiếng Anh, Code) -> Lowercase và trả về ngay
 	// Đây là trường hợp phổ biến nhất
 	isASCII := true
-	for i := 0; i < len(s); i++ {
+	for i := range s {
 		if s[i] > 127 {
 			isASCII = false
 			break
 		}
 	}
 	if isASCII {
-		return strings.ToLower(s)
+		buf := make([]byte, len(s))
+		for i, char := range []byte(s) {
+			if char >= 'A' && char <= 'Z' {
+				buf[i] = char + 32
+			} else if (char >= 'a' && char <= 'z') || (char >= '0' && char <= '9') || char == '.' || char == '/' || char == '\\' || char == '_' || char == '-' || char == ' ' {
+				buf[i] = char
+			}
+		}
+		return string(buf)
 	}
 
-	// MacOS dùng NFD nên cần check
-	if !norm.NFC.IsNormalString(s) {
-		s = norm.NFC.String(s)
-	}
+	// Do MacOS dùng NFD nên cần convert về NFC để so khớp bit-to-bit
+	s = norm.NFC.String(s)
 
 	// Duyệt trực tiếp trên byte, không decode rune
 	// Ký tự tiếng Việt NFC nằm trong phạm vi 2-3 byte UTF-8:
@@ -100,23 +61,21 @@ func Normalize(s string) string {
 	//   3-byte: 0xE0-0xEF + 2 byte tiếp theo (ắ, ằ, ẳ, ớ, ờ, ợ, ...)
 	buf := make([]byte, 0, len(s))
 	src := []byte(s)
-	i := 0
-
-	for i < len(src) {
+	for i := 0; i < len(src); {
 		b := src[i]
 
 		// xử lý trực tiếp không cần decode
 		if b < 128 {
 			if b >= 'A' && b <= 'Z' {
 				buf = append(buf, b+32) // toLower
-			} else {
+			} else if (b >= 'a' && b <= 'z') || (b >= '0' && b <= '9') || b == '.' || b == '/' || b == '\\' || b == '_' || b == '-' || b == ' ' {
 				buf = append(buf, b)
 			}
 			i++
 			continue
 		}
 
-		// 2-byte UTF-8 sequence: 0xC0-0xDF
+		// // 2-byte UTF-8 sequence: 0xC0-0xDF
 		if b >= 0xC0 && b <= 0xDF && i+1 < len(src) {
 			b2 := src[i+1]
 			mapped := mapViet2Byte(b, b2)
@@ -169,12 +128,10 @@ func Normalize(s string) string {
 		}
 		i += size
 	}
-
 	return string(buf)
 }
 
 // mapViet2Byte: map 2-byte UTF-8 Vietnamese chars -> ASCII
-// trả về 0 nếu không phải ký tự Việt cần map
 func mapViet2Byte(b1, b2 byte) byte {
 	switch b1 {
 	case 0xC3:
@@ -232,7 +189,6 @@ func mapViet3Byte(b1, b2, b3 byte) byte {
 	if b1 != 0xE1 {
 		return 0
 	}
-
 	switch b2 {
 	case 0xBA:
 		// 0xE1 0xBA 0x80-0xBF
@@ -244,18 +200,6 @@ func mapViet3Byte(b1, b2, b3 byte) byte {
 		}
 		if b3 >= 0xB8 && b3 <= 0xBF {
 			return 'e'
-		}
-		// Ả=0x82, ả=0x83, Ạ=0x80, ạ=0x81...
-		if b3 >= 0x80 && b3 <= 0x9F {
-			// 80-87 = a variants, 88-8D = e variants, 8E-93 = i? check
-			// thực tế Unicode block 1EA0-1EBF:
-			// 1EA0=Ạ, 1EA1=ạ, 1EA2=Ả, 1EA3=ả, 1EA4=Ấ, 1EA5=ấ, 1EA6=Ầ, 1EA7=ầ
-			// 1EA8=Ẩ, 1EA9=ẩ, 1EAA=Ẫ, 1EAB=ẫ, 1EAC=Ậ, 1EAD=ậ, 1EAE=Ắ, 1EAF=ắ
-			// 1EB0=Ằ, 1EB1=ằ, 1EB2=Ẳ, 1EB3=ẳ, 1EB4=Ẵ, 1EB5=ẵ, 1EB6=Ặ, 1EB7=ặ
-			// 1EB8=Ẹ, 1EB9=ẹ, 1EBA=Ẻ, 1EBB=ẻ, 1EBC=Ẽ, 1EBD=ẽ, 1EBE=Ế, 1EBF=ế
-			// UTF-8 encoding: 0xE1 0xBA 0x80-0x9F maps to U+1E80-1E9F
-			// nhưng U+1E80-1E9F là Ẁ, ẁ, Ẃ, ẃ (Welsh W variants) không phải tiếng Việt
-			return 0
 		}
 	case 0xBB:
 		// 0xE1 0xBB 0x80-0xBF
@@ -327,25 +271,15 @@ func FastSubstring(s string, n int) string {
 	return s
 }
 
-// func containsRunes(target []rune, pattern []rune) bool {
-// 	if len(pattern) == 0 {
-// 		return true
-// 	}
-// 	if len(pattern) > len(target) {
-// 		return false
-// 	}
-
-// 	p0 := pattern[0]
-// 	n := len(pattern)
-// 	for i := 0; i <= len(target)-n; i++ {
-// 		if target[i] == p0 && slices.Equal(target[i:i+n], pattern) {
-// 			return true
-// 		}
-// 	}
-// 	return false
-// }
+func abs(x int) int {
+	if x < 0 {
+		return -x
+	}
+	return x
+}
 
 /*
+LevenshteinRatio: Tính toán khoảng cách sai lệch giữa 2 chuỗi để tìm kiếm gợi ý (Typo).
 - Levenshtein Distance: https://viblo.asia/p/khoang-cach-levenshtein-va-fuzzy-query-trong-elasticsearch-jvElaOXAKkw
 - Bạn hiểu nôm na là để tính độ sai lệch khi gõ sai, tìm kết quả gần khớp với ý muốn của bạn nhất
 - Mính sẽ chỉ triển khai cái nào cần cho tiếng Việt thôi, Trung, Hàn, Nhật,... bỏ qua
@@ -354,12 +288,17 @@ func FastSubstring(s string, n int) string {
 + Xóa bỏ ký tự ở s1 (Chi phí +1)
 + Thêm ký tự vào s1 để giống s2 (Chi phí +1)
 + Thay thế:
-> Nếu 2 ký tự giống nhau: Không mất phí (+0)
-> Nếu khác nhau: Thay ký tự này bằng ký tự kia (+1)
-NOTE: 1 điều lưu ý là ta không cần quan tâm chữ hoa, chữ thường vì đã chuẩn hóa rồi
+  > Nếu 2 ký tự giống nhau: Không mất phí (+0)
+  > Nếu khác nhau: Thay ký tự này bằng ký tự kia (+1)
+- NOTE: Phiên bản v3 đã được tối ưu []rune để hỗ trợ Unicode chính xác và dùng stackBuf cho strings ngắn (<64 chars).
 */
-
 func LevenshteinRatio(s1, s2 string) int {
+	// Dùng []rune giúp ta nhảy từng ký tự Unicode thay vì nhảy byte
+	r1 := []rune(s1)
+	r2 := []rune(s2)
+	s1Len := len(r1)
+	s2Len := len(r2)
+
 	/*
 		Đây là trường hợp biến chuỗi s1 thành "chuỗi rỗng"
 		Ví dụ s1 = "ABC", s2 = ""
@@ -367,18 +306,6 @@ func LevenshteinRatio(s1, s2 string) int {
 		Biến "A" thành "" mất 1 bước xóa (column[1] = 1)
 		Biến "AB" thành "" mất 2 bước xóa (column[2] = 2)
 		Lúc này mảng column trông như thế này: [0, 1, 2, 3, ... len(s1)]
-		Tương ứng tăng dần từ 0 đến len(s1) là chi phí biến thành chuỗi rỗng
-	*/
-	s1Len := len(s1)
-	s2Len := len(s2)
-
-	/*
-		Cái này hiểu đơn giản là
-		Ví dụ như: "" -> "ABC" thì ta lấy luôn độ dài s2
-		Ngược lại "ABC" -> "" thì lấy độ dài s1
-		Vì rõ ràng số bước thay đổi từ rỗng thành text, hay text thành rỗng tốn số bước
-		đúng bằng độ dài của nó
-		Điều này giúp ta bỏ qua mấy bước bên dưới, làm tốn thêm phép toán và chậm đi chương trình
 	*/
 	if s1Len == 0 {
 		return s2Len
@@ -386,6 +313,13 @@ func LevenshteinRatio(s1, s2 string) int {
 	if s2Len == 0 {
 		return s1Len
 	}
+
+	// Tối ưu: Đảm bảo s1 luôn ngắn hơn để mảng column tốn ít bộ nhớ nhất
+	if s1Len > s2Len {
+		r1, r2 = r2, r1
+		s1Len, s2Len = s2Len, s1Len
+	}
+
 	// Stack array cho strings ngắn (99% trường hợp filename < 64 chars)
 	// Go compiler tự stack-allocate fixed-size array, zero heap alloc
 	var stackBuf [64]int
@@ -396,9 +330,10 @@ func LevenshteinRatio(s1, s2 string) int {
 		column = make([]int, s1Len+1)
 	}
 
-	for y := 1; y <= s1Len; y++ {
-		column[y] = y
+	for i := range column {
+		column[i] = i
 	}
+
 	/*
 			Ở đây mình sẽ giải thích sơ sơ
 			Thay vì dùng ma trận, mình dùng column như 1 stack từ trên xuống vậy, và ta sẽ ghi đè lên cái nào đã dùng
@@ -445,9 +380,9 @@ func LevenshteinRatio(s1, s2 string) int {
 
 							NOTE: lastKey = column[j-1]
 			*/
-			var incr int
-			if s1[j-1] != s2[i-1] {
-				incr = 1 // Khác nhau: +1 bước thay thế, còn không thì thôi không cần cộng
+			incr := 0
+			if r1[j-1] != r2[i-1] {
+				incr = 1
 			}
 
 			// Và đây chính xác là cái min chúng ta đã làm ở trên: min(trên, trái, chéo trái)
