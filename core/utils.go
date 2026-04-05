@@ -31,8 +31,13 @@ func CountWordMatches(queryWords []string, target string) int {
 }
 
 func Normalize(s string) string {
+	if s == "" {
+		return ""
+	}
+	// Ép NFC để fix NFD (MacOS) cho Unicode đồng nhất
+	s = norm.NFC.String(s)
+
 	// Nếu toàn là ASCII (Tiếng Anh, Code) -> Lowercase và trả về ngay
-	// Đây là trường hợp phổ biến nhất
 	isASCII := true
 	for i := range s {
 		if s[i] > 127 {
@@ -41,12 +46,12 @@ func Normalize(s string) string {
 		}
 	}
 	if isASCII {
-		buf := make([]byte, len(s))
-		for i, char := range []byte(s) {
+		buf := make([]byte, 0, len(s))
+		for _, char := range []byte(s) {
 			if char >= 'A' && char <= 'Z' {
-				buf[i] = char + 32
+				buf = append(buf, char+32)
 			} else if (char >= 'a' && char <= 'z') || (char >= '0' && char <= '9') || char == '.' || char == '/' || char == '\\' || char == '_' || char == '-' || char == ' ' {
-				buf[i] = char
+				buf = append(buf, char)
 			}
 		}
 		return string(buf)
@@ -271,12 +276,12 @@ func FastSubstring(s string, n int) string {
 	return s
 }
 
-// func abs(x int) int {
-// 	if x < 0 {
-// 		return -x
-// 	}
-// 	return x
-// }
+func abs(x int) int {
+	if x < 0 {
+		return -x
+	}
+	return x
+}
 
 /*
 LevenshteinRatio: Tính toán khoảng cách sai lệch giữa 2 chuỗi để tìm kiếm gợi ý (Typo).
