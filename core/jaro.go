@@ -81,8 +81,8 @@ func jaroSim(str1, str2 []byte) float64 {
 		defer jaroPool.Put(buf)
 		
 		// Reset vùng nhớ cần dùng
-		for i := 0; i < l1; i++ { buf[0][i] = false }
-		for i := 0; i < l2; i++ { buf[1][i] = false }
+		clear(buf[0][:l1])
+		clear(buf[1][:l2])
 		
 		str1Matches = buf[0][:l1]
 		str2Matches = buf[1][:l2]
