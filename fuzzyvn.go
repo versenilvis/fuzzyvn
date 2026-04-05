@@ -2,6 +2,7 @@ package fuzzyvn
 
 import (
 	"math"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -175,15 +176,13 @@ func (s *Searcher) Search(query string, opts ...*SearchOptions) []string {
 		})
 	}
 
-	// Sắp xếp lại nếu có Boost (điểm có thể thay đổi sau boost)
-	if len(memoryBoosts) > 0 || (len(opts) > 0 && opts[0] != nil && opts[0].ContextBoosts != nil) {
-		sort.Slice(rankedResults, func(i, j int) bool {
-			if rankedResults[i].Score == rankedResults[j].Score {
-				return rankedResults[i].Str < rankedResults[j].Str
-			}
-			return rankedResults[i].Score > rankedResults[j].Score
-		})
-	}
+	// Sort để đảm bảo thứ tự deterministic (alphabet khi cùng điểm)
+	sort.Slice(rankedResults, func(i, j int) bool {
+		if rankedResults[i].Score == rankedResults[j].Score {
+			return rankedResults[i].Str < rankedResults[j].Str
+		}
+		return rankedResults[i].Score > rankedResults[j].Score
+	})
 
 	// Trả về Top 20 (hoặc tùy cấu hình)
 	limit := 20
@@ -203,21 +202,57 @@ func (s *Searcher) Search(query string, opts ...*SearchOptions) []string {
 findButTypo: Tìm kiếm gợi ý khi người dùng gõ sai chính tả (dựa trên Levenshtein)
 */
 func (s *Searcher) findButTypo(query string) []core.FuzzyMatch {
+	numItems := len(s.FilenamesOnly)
+	if numItems == 0 {
+		return nil
+	}
+
+	threshold := len(query) / 4
+	if threshold < 1 {
+		threshold = 1
+	}
+
+	numCPUs := runtime.GOMAXPROCS(0)
+	chunkSize := (numItems + numCPUs - 1) / numCPUs
+
+	var wg sync.WaitGroup
+	resultChan := make(chan []core.FuzzyMatch, numCPUs)
+
+	for i := range numCPUs {
+		start := i * chunkSize
+		if start >= numItems {
+			break
+		}
+		end := start + chunkSize
+		if end > numItems {
+			end = numItems
+		}
+
+		wg.Add(1)
+		go func(s0, e int) {
+			defer wg.Done()
+			var local []core.FuzzyMatch
+			for j := s0; j < e; j++ {
+				dist := core.LevenshteinRatio(query, s.FilenamesOnly[j])
+				if dist <= threshold {
+					local = append(local, core.FuzzyMatch{
+						Index: j,
+						Score: 100 - dist*10,
+					})
+				}
+			}
+			resultChan <- local
+		}(start, end)
+	}
+
+	go func() {
+		wg.Wait()
+		close(resultChan)
+	}()
+
 	var matches []core.FuzzyMatch
-	// chỉ so sánh với file name để đạt độ chính xác cao nhất cho typo
-	for i, filename := range s.FilenamesOnly {
-		dist := core.LevenshteinRatio(query, filename)
-		// cho phép sai 1 ký tự trên 4 ký tự gõ vào
-		threshold := len(query) / 4
-		if threshold < 1 {
-			threshold = 1
-		}
-		if dist <= threshold {
-			matches = append(matches, core.FuzzyMatch{
-				Index: i,
-				Score: 100 - dist*10, // điểm typo thấp hơn điểm fuzzy
-			})
-		}
+	for chunk := range resultChan {
+		matches = append(matches, chunk...)
 	}
 	return matches
 }
