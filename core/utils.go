@@ -271,26 +271,26 @@ func FastSubstring(s string, n int) string {
 	return s
 }
 
-func abs(x int) int {
-	if x < 0 {
-		return -x
-	}
-	return x
-}
+// func abs(x int) int {
+// 	if x < 0 {
+// 		return -x
+// 	}
+// 	return x
+// }
 
 /*
 LevenshteinRatio: Tính toán khoảng cách sai lệch giữa 2 chuỗi để tìm kiếm gợi ý (Typo).
-- Levenshtein Distance: https://viblo.asia/p/khoang-cach-levenshtein-va-fuzzy-query-trong-elasticsearch-jvElaOXAKkw
-- Bạn hiểu nôm na là để tính độ sai lệch khi gõ sai, tìm kết quả gần khớp với ý muốn của bạn nhất
-- Mính sẽ chỉ triển khai cái nào cần cho tiếng Việt thôi, Trung, Hàn, Nhật,... bỏ qua
-- Mục tiêu là biến chuỗi s1 thành s2
-- Tại mỗi bước so sánh ký tự, ta có 3 quyền lựa chọn, ta sẽ chọn cái nào tốn ít chi phí nhất (minVal):
-+ Xóa bỏ ký tự ở s1 (Chi phí +1)
-+ Thêm ký tự vào s1 để giống s2 (Chi phí +1)
-+ Thay thế:
-  > Nếu 2 ký tự giống nhau: Không mất phí (+0)
-  > Nếu khác nhau: Thay ký tự này bằng ký tự kia (+1)
-- NOTE: Phiên bản v3 đã được tối ưu []rune để hỗ trợ Unicode chính xác và dùng stackBuf cho strings ngắn (<64 chars).
+  - Levenshtein Distance: https://viblo.asia/p/khoang-cach-levenshtein-va-fuzzy-query-trong-elasticsearch-jvElaOXAKkw
+  - Bạn hiểu nôm na là để tính độ sai lệch khi gõ sai, tìm kết quả gần khớp với ý muốn của bạn nhất
+  - Mính sẽ chỉ triển khai cái nào cần cho tiếng Việt thôi, Trung, Hàn, Nhật,... bỏ qua
+  - Mục tiêu là biến chuỗi s1 thành s2
+  - Tại mỗi bước so sánh ký tự, ta có 3 quyền lựa chọn, ta sẽ chọn cái nào tốn ít chi phí nhất (minVal):
+  - Xóa bỏ ký tự ở s1 (Chi phí +1)
+  - Thêm ký tự vào s1 để giống s2 (Chi phí +1)
+  - Thay thế:
+    > Nếu 2 ký tự giống nhau: Không mất phí (+0)
+    > Nếu khác nhau: Thay ký tự này bằng ký tự kia (+1)
+  - NOTE: Phiên bản v3 đã được tối ưu []rune để hỗ trợ Unicode chính xác và dùng stackBuf cho strings ngắn (<64 chars).
 */
 func LevenshteinRatio(s1, s2 string) int {
 	// Dùng []rune giúp ta nhảy từng ký tự Unicode thay vì nhảy byte
