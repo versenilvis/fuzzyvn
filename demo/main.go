@@ -31,8 +31,10 @@ type SearchResult struct {
 }
 
 type SearchResponse struct {
-	RecentFiles []string       `json:"recent_files"`
+	RecentFiles []string       `json:"recentFiles"`
 	Results     []SearchResult `json:"results"`
+	Error       string         `json:"error,omitempty"`
+	Count       int            `json:"count,omitempty"`
 }
 
 type SelectionRequest struct {
@@ -43,7 +45,7 @@ type SelectionRequest struct {
 func handleHome(w http.ResponseWriter, r *http.Request) {
 	tmpl := challengeHTML
 	t, _ := template.New("index").Parse(tmpl)
-	t.Execute(w, nil)
+	_ = t.Execute(w, nil)
 }
 
 func indexFiles(rootPath string) {
@@ -82,9 +84,10 @@ func indexFiles(rootPath string) {
 func search(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query().Get("q")
 	if query == "" {
-		json.NewEncoder(w).Encode(SearchResponse{
-			RecentFiles: []string{},
-			Results:     []SearchResult{},
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(SearchResponse{
+			Error:   "Query parameter is required",
+			Results: []SearchResult{},
 		})
 		return
 	}
@@ -93,7 +96,8 @@ func search(w http.ResponseWriter, r *http.Request) {
 	defer searcherLock.RUnlock()
 
 	if searcher == nil {
-		json.NewEncoder(w).Encode(SearchResponse{
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(SearchResponse{
 			RecentFiles: []string{},
 			Results:     []SearchResult{},
 		})
@@ -115,9 +119,11 @@ func search(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(SearchResponse{
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(SearchResponse{
 		RecentFiles: recentFiles,
 		Results:     results,
+		Count:       len(results),
 	})
 }
 
