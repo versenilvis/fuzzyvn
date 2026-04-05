@@ -276,12 +276,12 @@ func FastSubstring(s string, n int) string {
 	return s
 }
 
-func abs(x int) int {
-	if x < 0 {
-		return -x
-	}
-	return x
-}
+// func abs(x int) int {
+// 	if x < 0 {
+// 		return -x
+// 	}
+// 	return x
+// }
 
 /*
 LevenshteinRatio: Tính toán khoảng cách sai lệch giữa 2 chuỗi để tìm kiếm gợi ý (Typo).
