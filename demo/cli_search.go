@@ -13,7 +13,7 @@ import (
 )
 
 func main() {
-	rootPath := "./demo/test_data"
+	rootPath := "./test_data"
 	fmt.Println("CLI DEBUGGER: Scanning...", rootPath)
 
 	var files []string
