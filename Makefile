@@ -2,7 +2,10 @@
 .PHONY: demo test bench
 
 demo:
-	@cd demo && go run main.go
+	@go run demo/main.go
+
+cli:
+	@go run demo/cli_search.go
 
 test:
 	@go test -v
