@@ -674,7 +674,7 @@ func BenchmarkSearch_RealWorld(b *testing.B) {
 	b.Run("Search/50k_Files", func(b *testing.B) {
 		searcher := NewSearcher(files50k)
 		b.ResetTimer()
-		for b.Loop() {
+		for i := 0; i < b.N; i++ {
 			searcher.Search("config")
 		}
 	})
@@ -682,7 +682,7 @@ func BenchmarkSearch_RealWorld(b *testing.B) {
 	b.Run("Search/100k_Files", func(b *testing.B) {
 		searcher := NewSearcher(allFiles)
 		b.ResetTimer()
-		for b.Loop() {
+		for i := 0; i < b.N; i++ {
 			searcher.Search("config")
 		}
 	})
@@ -690,7 +690,7 @@ func BenchmarkSearch_RealWorld(b *testing.B) {
 	b.Run("Search/100K_Files_Typo", func(b *testing.B) {
 		searcher := NewSearcher(allFiles)
 		b.ResetTimer()
-		for b.Loop() {
+		for i := 0; i < b.N; i++ {
 			searcher.Search("conifg")
 		}
 	})
@@ -699,7 +699,7 @@ func BenchmarkSearch_RealWorld(b *testing.B) {
 func BenchmarkNewSearcher(b *testing.B) {
 	files := generateTestFiles(1000)
 	b.ResetTimer()
-	for b.Loop() {
+	for i := 0; i < b.N; i++ {
 		NewSearcher(files)
 	}
 }
@@ -709,7 +709,7 @@ func BenchmarkSearch(b *testing.B) {
 		files := generateTestFiles(100)
 		searcher := NewSearcher(files)
 		b.ResetTimer()
-		for b.Loop() {
+		for i := 0; i < b.N; i++ {
 			searcher.Search("main")
 		}
 	})
@@ -718,7 +718,7 @@ func BenchmarkSearch(b *testing.B) {
 		files := generateTestFiles(1000)
 		searcher := NewSearcher(files)
 		b.ResetTimer()
-		for b.Loop() {
+		for i := 0; i < b.N; i++ {
 			searcher.Search("main")
 		}
 	})
@@ -727,7 +727,7 @@ func BenchmarkSearch(b *testing.B) {
 		files := generateTestFiles(10000)
 		searcher := NewSearcher(files)
 		b.ResetTimer()
-		for b.Loop() {
+		for i := 0; i < b.N; i++ {
 			searcher.Search("config")
 		}
 	})
@@ -739,14 +739,14 @@ func BenchmarkSearchVietnamese(b *testing.B) {
 
 	b.Run("tiếng Việt có dấu", func(b *testing.B) {
 		b.ResetTimer()
-		for b.Loop() {
+		for i := 0; i < b.N; i++ {
 			searcher.Search("báo cáo")
 		}
 	})
 
 	b.Run("tiếng Việt không dấu", func(b *testing.B) {
 		b.ResetTimer()
-		for b.Loop() {
+		for i := 0; i < b.N; i++ {
 			searcher.Search("bao cao")
 		}
 	})
@@ -761,7 +761,7 @@ func BenchmarkSearchWithCache(b *testing.B) {
 	searcher.RecordSelection("config", files[2])
 
 	b.ResetTimer()
-	for b.Loop() {
+	for i := 0; i < b.N; i++ {
 		searcher.Search("main")
 	}
 }
@@ -776,7 +776,7 @@ func BenchmarkNormalize(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for b.Loop() {
+	for i := 0; i < b.N; i++ {
 		for _, s := range testStrings {
 			Normalize(s)
 		}
@@ -792,7 +792,7 @@ func BenchmarkLevenshteinRatio(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for b.Loop() {
+	for i := 0; i < b.N; i++ {
 		for _, p := range pairs {
 			LevenshteinRatio(p.a, p.b)
 		}
@@ -803,10 +803,8 @@ func BenchmarkRecordSelection(b *testing.B) {
 	mem := core.NewFileMemory(nil)
 
 	b.ResetTimer()
-	i := 0
-	for b.Loop() {
+	for i := 0; i < b.N; i++ {
 		mem.RecordSelection(fmt.Sprintf("query%d", i%100), fmt.Sprintf("/file%d.go", i%1000))
-		i++
 	}
 }
 
@@ -817,7 +815,7 @@ func BenchmarkGetBoostScores(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for b.Loop() {
+	for i := 0; i < b.N; i++ {
 		mem.GetBoostScores("query50")
 	}
 }

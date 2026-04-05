@@ -68,7 +68,7 @@ func BenchmarkLinux100k(b *testing.B) {
 	for _, q := range queries {
 		b.Run(q.name, func(b *testing.B) {
 			b.ResetTimer()
-			for b.Loop() {
+			for i := 0; i < b.N; i++ {
 				searcher.Search(q.query)
 			}
 		})
@@ -82,7 +82,7 @@ func BenchmarkLinux100k_NewSearcher(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for b.Loop() {
+	for i := 0; i < b.N; i++ {
 		NewSearcher(files)
 	}
 }
