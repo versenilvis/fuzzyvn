@@ -175,15 +175,13 @@ func (s *Searcher) Search(query string) []string {
 
 	// Search bằng Fuzzy Matcher
 	// Nếu UnigramFilter lọc được candidates -> chỉ chấm điểm trên tập nhỏ đó
-	// Nếu không (query quá ngắn hoặc filter trả về nil) -> full scan như bình thường
+	// Nếu không (query quá ngắn hoặc filter trả về nil) -> full scan
 	var matches []core.FuzzyMatch
 	candidates := s.Filter.Filter(queryPattern)
 	if candidates != nil {
 		matches = core.FuzzyFindFiltered(queryPattern, s.Normalized, candidates)
-	} else if len(s.Normalized) >= 1000 {
-		matches = core.FuzzyFindParallel(queryPattern, s.Normalized)
 	} else {
-		matches = core.FuzzyFind(queryPattern, s.Normalized)
+		matches = core.FuzzyFindParallel(queryPattern, s.Normalized)
 	}
 
 	// Reuse pre-alloc flat array, chỉ reset những index đã ghi
