@@ -2,8 +2,11 @@ name: Release Go Package
 
 on:
   push:
+    branches: [ main ]
     tags:
-      - 'v*' # Trigger khi push tag (vd: v0.1.6)
+      - 'v*'
+  pull_request:
+    branches: [ main ]
 
 permissions:
   contents: write
