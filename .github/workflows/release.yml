@@ -42,9 +42,9 @@ jobs:
         run: go test -bench=. -benchmem ./...
 
       # 4. Tạo Release trên GitHub
-      # Đối với Library, ta không cần upload file .zip hay .exe
-      # GitHub sẽ tự tạo Source code (zip/tar.gz)
+      # CHỈ chạy khi có tag (vd: v0.3.0)
       - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v1
         with:
           name: Release ${{ github.ref_name }}
@@ -53,7 +53,7 @@ jobs:
             ## Changes
             ## Installation
             ```bash
-            go get [github.com/$](https://github.com/$){{ github.repository }}@${{ github.ref_name }}
+            go get github.com/${{ github.repository }}@${{ github.ref_name }}
             ```
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
