@@ -83,7 +83,7 @@ func NewSearcher(items []string) *Searcher {
 				for i := range buf {
 					buf[i] = math.MinInt
 				}
-				return buf
+				return &buf
 			},
 		},
 	}
@@ -138,13 +138,14 @@ func (s *Searcher) Search(query string, opts ...*SearchOptions) []string {
 	}
 
 	// xếp hạng và áp dụng boosts
-	scoreBuf := s.scorePool.Get().([]int)
+	scoreBufPtr := s.scorePool.Get().(*[]int)
+	scoreBuf := *scoreBufPtr
 	defer func() {
 		// reset buffer trước khi trả lại pool
 		for i := range scoreBuf {
 			scoreBuf[i] = math.MinInt
 		}
-		s.scorePool.Put(scoreBuf)
+		s.scorePool.Put(scoreBufPtr)
 	}()
 
 	for _, m := range matches {
