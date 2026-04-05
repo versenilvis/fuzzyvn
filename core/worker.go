@@ -171,3 +171,105 @@ func FuzzyFindParallel(pattern []byte, targets [][]byte) []FuzzyMatch {
 
 	return allResults
 }
+
+/*
+FuzzyFindFiltered: Chạy fuzzy scoring chỉ trên danh sách candidates do UnigramFilter nhả ra
+- candidates: Danh sách docID đã qua vòng lọc K-of-N
+- pattern: Query (đã normalize)
+- targets: Toàn bộ danh sách file (để tra cứu theo docID)
+- Trả về: Slice of FuzzyMatch, sorted by score descending
+
+Ví dụ: thay vì quét 100,000 file -> chỉ quét 500 file sau filter
+*/
+func FuzzyFindFiltered(pattern []byte, targets [][]byte, candidates []int) []FuzzyMatch {
+	if len(pattern) == 0 || len(candidates) == 0 {
+		return nil
+	}
+
+	numCandidates := len(candidates)
+
+	// dưới 2000 candidates thì chạy 1 luồng cho đỡ overhead
+	if numCandidates < 2000 {
+		results := make([]FuzzyMatch, 0, numCandidates/4)
+		for _, docID := range candidates {
+			score, matched := fuzzyScoreGreedy(pattern, targets[docID])
+			if matched {
+				exact := bytes.Contains(targets[docID], pattern)
+				if exact {
+					score += 200
+				}
+				results = append(results, FuzzyMatch{
+					Index: docID, // giữ nguyên docID gốc để map về originals
+					Score: score,
+					Exact: exact,
+				})
+			}
+		}
+
+		slices.SortFunc(results, func(a, b FuzzyMatch) int {
+			return b.Score - a.Score
+		})
+		return results
+	}
+
+	// parallel version cho candidates lớn
+	numWorkers := runtime.NumCPU()
+	if numWorkers > 16 {
+		numWorkers = 16
+	}
+
+	chunkSize := (numCandidates + numWorkers - 1) / numWorkers
+	resultChan := make(chan []FuzzyMatch, numWorkers)
+
+	var wg sync.WaitGroup
+	for w := range numWorkers {
+		start := w * chunkSize
+		end := start + chunkSize
+		if end > numCandidates {
+			end = numCandidates
+		}
+		if start >= numCandidates {
+			break
+		}
+
+		wg.Add(1)
+		go func(start, end int) {
+			defer wg.Done()
+			localResults := make([]FuzzyMatch, 0, (end-start)/4)
+
+			for i := start; i < end; i++ {
+				docID := candidates[i]
+				score, matched := fuzzyScoreGreedy(pattern, targets[docID])
+				if matched {
+					exact := bytes.Contains(targets[docID], pattern)
+					if exact {
+						score += 200
+					}
+					localResults = append(localResults, FuzzyMatch{
+						Index: docID,
+						Score: score,
+						Exact: exact,
+					})
+				}
+			}
+
+			resultChan <- localResults
+		}(start, end)
+	}
+
+	go func() {
+		wg.Wait()
+		close(resultChan)
+	}()
+
+	allResults := make([]FuzzyMatch, 0, numCandidates/4)
+	for localResults := range resultChan {
+		allResults = append(allResults, localResults...)
+	}
+
+	slices.SortFunc(allResults, func(a, b FuzzyMatch) int {
+		return b.Score - a.Score
+	})
+
+	return allResults
+}

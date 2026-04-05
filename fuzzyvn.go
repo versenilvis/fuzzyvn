@@ -70,12 +70,13 @@ import (
   - Lần search sau: Files có SelectCount cao được ưu tiên lên đầu
 */
 type Searcher struct {
-	Originals     []string       // Data gốc (có dấu, viết hoa thường lộn xộn bla bla). Dùng để trả về kết quả hiển thị
-	Normalized    [][]byte       // Data đã chuẩn hóa cho fuzzy search, lưu dưới dạng byte để tìm kiếm nhanh
-	FilenamesOnly []string       // Chỉ chứa tên file đã chuẩn hóa (bỏ đường dẫn). Dùng cho thuật toán Levenshtein (sửa lỗi chính tả)
-	FilePathToIdx map[string]int // Nhằm mục đích không phải tạo lại mỗi lần Search
-	Cache         *QueryCache    // Để lấy dữ liệu lịch sử
-	scoreBuf      []int          // Pre-alloc flat array cho Search(), reuse qua các lần gọi
+	Originals     []string            // Data gốc (có dấu, viết hoa thường lộn xộn bla bla). Dùng để trả về kết quả hiển thị
+	Normalized    [][]byte            // Data đã chuẩn hóa cho fuzzy search, lưu dưới dạng byte để tìm kiếm nhanh
+	FilenamesOnly []string            // Chỉ chứa tên file đã chuẩn hóa (bỏ đường dẫn). Dùng cho thuật toán Levenshtein (sửa lỗi chính tả)
+	FilePathToIdx map[string]int      // Nhằm mục đích không phải tạo lại mỗi lần Search
+	Cache         *QueryCache         // Để lấy dữ liệu lịch sử
+	Filter        *core.UnigramFilter // Lọc nhanh candidates trước khi chấm điểm
+	scoreBuf      []int               // Pre-alloc flat array cho Search(), reuse qua các lần gọi
 }
 
 /*
@@ -124,6 +125,7 @@ func NewSearcher(items []string) *Searcher {
 		FilenamesOnly: normNames,
 		FilePathToIdx: pathMap,
 		Cache:         core.NewQueryCache(),
+		Filter:        core.NewUnigramFilter(normPaths),
 		scoreBuf:      scoreBuf,
 	}
 }
@@ -171,10 +173,14 @@ func (s *Searcher) Search(query string) []string {
 
 	queryPattern := []byte(queryNorm)
 
-	// Search bằng Smith-Waterman Fuzzy Matcher (tự implement, không dependency)
-	// Dùng parallel version nếu có nhiều files
+	// Search bằng Fuzzy Matcher
+	// Nếu UnigramFilter lọc được candidates -> chỉ chấm điểm trên tập nhỏ đó
+	// Nếu không (query quá ngắn hoặc filter trả về nil) -> full scan như bình thường
 	var matches []core.FuzzyMatch
-	if len(s.Normalized) >= 1000 {
+	candidates := s.Filter.Filter(queryPattern)
+	if candidates != nil {
+		matches = core.FuzzyFindFiltered(queryPattern, s.Normalized, candidates)
+	} else if len(s.Normalized) >= 1000 {
 		matches = core.FuzzyFindParallel(queryPattern, s.Normalized)
 	} else {
 		matches = core.FuzzyFind(queryPattern, s.Normalized)
