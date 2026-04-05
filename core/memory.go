@@ -127,11 +127,12 @@ func (fm *FileMemory) GetBoostScores(query string) map[string]int {
 	queryNorm := Normalize(query)
 	now := time.Now().Unix()
 
+	queryPattern := []byte(queryNorm)
 	for path, record := range fm.files {
 		// tính độ mức độ phù hợp của query
 		bestSim := 0.0
 		for _, q := range record.Queries {
-			sim := JaroWinkler(queryNorm, q)
+			sim := JaroWinkler(queryPattern, []byte(q))
 			if sim > bestSim {
 				bestSim = sim
 			}
