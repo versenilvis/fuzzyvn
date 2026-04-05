@@ -174,13 +174,15 @@ func (s *Searcher) Search(query string, opts ...*SearchOptions) []string {
 		})
 	}
 
-	// Sort kết quả sau khi đã cộng điểm Boost
-	sort.Slice(rankedResults, func(i, j int) bool {
-		if rankedResults[i].Score == rankedResults[j].Score {
-			return rankedResults[i].Str < rankedResults[j].Str
-		}
-		return rankedResults[i].Score > rankedResults[j].Score
-	})
+	// Sắp xếp lại nếu có Boost (điểm có thể thay đổi sau boost)
+	if len(memoryBoosts) > 0 || (len(opts) > 0 && opts[0] != nil && opts[0].ContextBoosts != nil) {
+		sort.Slice(rankedResults, func(i, j int) bool {
+			if rankedResults[i].Score == rankedResults[j].Score {
+				return rankedResults[i].Str < rankedResults[j].Str
+			}
+			return rankedResults[i].Score > rankedResults[j].Score
+		})
+	}
 
 	// Trả về Top 20 (hoặc tùy cấu hình)
 	limit := 20
