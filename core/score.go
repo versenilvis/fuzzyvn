@@ -98,29 +98,44 @@ func fuzzyScoreGreedy(pattern []byte, target []byte, baseStart int) (int, bool) 
 	}
 	totalScore += baseScore
 
-	// Khớp chính xác tên file -> Điểm cao
-	// filename nằm ở [0, baseStart) trong target
-	if baseStart == lenP {
-		isExactBase := true
-		for i, char := range target[:lenP] {
-			if char != pattern[i] {
-				isExactBase = false
+	// Tier 1: Query là prefix chính xác của filename
+	isPerfectStart := false
+	if baseStart >= lenP {
+		isPerfectStart = true
+		for i := 0; i < lenP; i++ {
+			if target[i] != pattern[i] {
+				isPerfectStart = false
 				break
 			}
 		}
-		if isExactBase {
-			// Bonus 40% nếu khớp chính xác tên file
-			totalScore += (totalScore * 40) / 100
+	}
+
+	if isPerfectStart {
+		totalScore += 1000000
+		return totalScore, true
+	}
+
+	// Tier 2: Filename ngắn chứa tất cả ký tự của query
+	var charBucket [256]int8
+	for i := 0; i < baseStart; i++ {
+		charBucket[target[i]]++
+	}
+	filenameHits := 0
+	for _, b := range pattern {
+		if charBucket[b] > 0 {
+			charBucket[b]--
+			filenameHits++
 		}
+	}
+
+	if filenameHits == lenP && baseStart <= lenP*3 {
+		totalScore += 500000
 	} else if firstMatchIdx < baseStart {
-		// Bonus 16% nếu có ít nhất 1 match trong phần filename
-		totalScore += (totalScore * 16) / 100
+		// Tier 3: Có ít nhất 1 match trong filename
+		totalScore += (totalScore * 200) / 100
 	} else {
-		// Chỉ match ở phần path -> check entry point
-		filename := string(target[:baseStart])
-		if isEntryPoint(filename) {
-			totalScore += (totalScore * 5) / 100
-		}
+		// Tier 4: Chỉ match ở phần path -> phạt nặng
+		totalScore -= (lenT / 3)
 	}
 
 	return totalScore, true
