@@ -1,31 +1,5 @@
 package core
 
-import (
-	"unicode"
-)
-
-/*
-isEntryPoint: Kiểm tra xem filename có phải là file khởi đầu quan trọng không
-*/
-func isEntryPoint(filename string) bool {
-	switch filename {
-	case "mod.rs", "lib.rs", "main.rs", // Rust
-		"index.js", "index.jsx", "index.ts", "index.tsx", "index.mjs", "index.cjs", // JS/TS
-		"index.vue", "App.vue", // Vue
-		"index.html",                            // Web
-		"__init__.py", "__main__.py", "main.py", // Python
-		"main.go",                      // Go
-		"main.c", "main.cpp", "main.h", // C/C++
-		"index.php",           // PHP
-		"main.rb", "index.rb", // Ruby
-		"Main.java", "Application.java", // Java
-		"main.swift", // Swift
-		"main.dart":  // Dart/Flutter
-		return true
-	}
-	return false
-}
-
 /*
 fuzzyScoreGreedy: Tính điểm fuzzy match sử dụng thuật toán tham lam
 - pattern: Query đã normalize
@@ -46,30 +20,23 @@ func fuzzyScoreGreedy(pattern []byte, target []byte, baseStart int) (int, bool) 
 	lastMatchIdx := -1
 
 	// Duyệt 1 lần duy nhất qua target
-	for i, char := range target {
-		if patternIdx < lenP && char == pattern[patternIdx] {
+	for i := 0; i < lenT; i++ {
+		if patternIdx < lenP && target[i] == pattern[patternIdx] {
 			if firstMatchIdx == -1 {
 				firstMatchIdx = i
 			}
 			lastMatchIdx = i
 
-			// Bonus điểm nếu khớp ký tự đầu từ
-			isWordStart := false
+			// Bonus điểm nếu khớp ký tự đầu từ (word boundary)
 			if i == 0 {
-				isWordStart = true
-			} else {
-				prev := target[i-1]
-				if prev == '/' || prev == '\\' || prev == '_' || prev == '-' || prev == '.' || prev == ' ' {
-					isWordStart = true
-				} else if unicode.IsLower(rune(prev)) && unicode.IsUpper(rune(target[i])) {
-					isWordStart = true
-				}
-			}
-
-			if isWordStart {
 				totalScore += 80
 			} else {
-				totalScore += 10
+				switch target[i-1] {
+				case '/', '\\', '_', '-', '.', ' ':
+					totalScore += 80
+				default:
+					totalScore += 10
+				}
 			}
 
 			// Bonus nếu khớp trong phần tên file
@@ -99,39 +66,42 @@ func fuzzyScoreGreedy(pattern []byte, target []byte, baseStart int) (int, bool) 
 	totalScore += baseScore
 
 	// Tier 1: Query là prefix chính xác của filename
-	isPerfectStart := false
 	if baseStart >= lenP {
-		isPerfectStart = true
+		isPerfectStart := true
 		for i := 0; i < lenP; i++ {
 			if target[i] != pattern[i] {
 				isPerfectStart = false
 				break
 			}
 		}
-	}
-
-	if isPerfectStart {
-		totalScore += 1000000
-		return totalScore, true
-	}
-
-	// Tier 2: Filename ngắn chứa tất cả ký tự của query
-	var charBucket [256]int8
-	for i := 0; i < baseStart; i++ {
-		charBucket[target[i]]++
-	}
-	filenameHits := 0
-	for _, b := range pattern {
-		if charBucket[b] > 0 {
-			charBucket[b]--
-			filenameHits++
+		if isPerfectStart {
+			totalScore += 1000000
+			return totalScore, true
 		}
 	}
 
-	if filenameHits == lenP && baseStart <= lenP*3 {
-		totalScore += 500000
-	} else if firstMatchIdx < baseStart {
-		// Tier 3: Có ít nhất 1 match trong filename
+	// Tier 2: Filename ngắn chứa tất cả ký tự của query
+	// Check điều kiện rẻ nhất trước để tránh tính charBucket cho hàng vạn file
+	if baseStart <= lenP*3 {
+		var charBucket [256]int8
+		for i := 0; i < baseStart; i++ {
+			charBucket[target[i]]++
+		}
+		filenameHits := 0
+		for _, b := range pattern {
+			if charBucket[b] > 0 {
+				charBucket[b]--
+				filenameHits++
+			}
+		}
+		if filenameHits == lenP {
+			totalScore += 500000
+			return totalScore, true
+		}
+	}
+
+	// Tier 3: Có ít nhất 1 match trong filename
+	if firstMatchIdx < baseStart {
 		totalScore += (totalScore * 200) / 100
 	} else {
 		// Tier 4: Chỉ match ở phần path -> phạt nặng
