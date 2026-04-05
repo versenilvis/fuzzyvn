@@ -21,6 +21,25 @@ func isSeparator(r rune) bool {
 	return r == '/' || r == '\\' || r == '_' || r == '-' || r == '.' || r == ' ' || r == ':'
 }
 
+func isEntryPoint(filename string) bool {
+	switch filename {
+	case "mod.rs", "lib.rs", "main.rs",                     // Rust
+		"index.js", "index.jsx", "index.ts", "index.tsx", "index.mjs", "index.cjs", // JS/TS
+		"index.vue", "App.vue",                             // Vue
+		"index.html",                                       // Web
+		"__init__.py", "__main__.py", "main.py",            // Python
+		"main.go",                                          // Go
+		"main.c", "main.cpp", "main.h",                     // C/C++
+		"index.php",                                        // PHP
+		"main.rb", "index.rb",                              // Ruby
+		"Main.java", "Application.java",                    // Java
+		"main.swift",                                       // Swift
+		"main.dart":                                        // Dart/Flutter
+		return true
+	}
+	return false
+}
+
 func CountWordMatches(queryWords []string, target string) int {
 	if len(target) < 2 {
 		return 0
