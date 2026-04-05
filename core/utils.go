@@ -1,7 +1,6 @@
 package core
 
 import (
-	"slices"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -23,18 +22,18 @@ func isSeparator(r rune) bool {
 
 func isEntryPoint(filename string) bool {
 	switch filename {
-	case "mod.rs", "lib.rs", "main.rs",                     // Rust
+	case "mod.rs", "lib.rs", "main.rs", // Rust
 		"index.js", "index.jsx", "index.ts", "index.tsx", "index.mjs", "index.cjs", // JS/TS
-		"index.vue", "App.vue",                             // Vue
-		"index.html",                                       // Web
-		"__init__.py", "__main__.py", "main.py",            // Python
-		"main.go",                                          // Go
-		"main.c", "main.cpp", "main.h",                     // C/C++
-		"index.php",                                        // PHP
-		"main.rb", "index.rb",                              // Ruby
-		"Main.java", "Application.java",                    // Java
-		"main.swift",                                       // Swift
-		"main.dart":                                        // Dart/Flutter
+		"index.vue", "App.vue", // Vue
+		"index.html",                            // Web
+		"__init__.py", "__main__.py", "main.py", // Python
+		"main.go",                      // Go
+		"main.c", "main.cpp", "main.h", // C/C++
+		"index.php",           // PHP
+		"main.rb", "index.rb", // Ruby
+		"Main.java", "Application.java", // Java
+		"main.swift", // Swift
+		"main.dart":  // Dart/Flutter
 		return true
 	}
 	return false
@@ -164,23 +163,23 @@ func FastSubstring(s string, n int) string {
 	return s
 }
 
-func containsRunes(target []rune, pattern []rune) bool {
-	if len(pattern) == 0 {
-		return true
-	}
-	if len(pattern) > len(target) {
-		return false
-	}
+// func containsRunes(target []rune, pattern []rune) bool {
+// 	if len(pattern) == 0 {
+// 		return true
+// 	}
+// 	if len(pattern) > len(target) {
+// 		return false
+// 	}
 
-	p0 := pattern[0]
-	n := len(pattern)
-	for i := 0; i <= len(target)-n; i++ {
-		if target[i] == p0 && slices.Equal(target[i:i+n], pattern) {
-			return true
-		}
-	}
-	return false
-}
+// 	p0 := pattern[0]
+// 	n := len(pattern)
+// 	for i := 0; i <= len(target)-n; i++ {
+// 		if target[i] == p0 && slices.Equal(target[i:i+n], pattern) {
+// 			return true
+// 		}
+// 	}
+// 	return false
+// }
 
 /*
 - Levenshtein Distance: https://viblo.asia/p/khoang-cach-levenshtein-va-fuzzy-query-trong-elasticsearch-jvElaOXAKkw
