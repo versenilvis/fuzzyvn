@@ -49,22 +49,23 @@ go get github.com/versenilvis/fuzzyvn
 > [!NOTE]
 > Benchmark chạy trên Google Cloud VM (N2-Standard-2, Intel® Xeon® 2.80 GHz, 2 vCPU, 8 GB RAM).
 
-| Operation                  | Time        | Memory | Notes                            |
-| -------------------------- | ----------- | ------ | -------------------------------- |
-| NewSearcher                | **0.282ms** | 330KB  | Build index (synthetic 1K files) |
-| Search 100 files           | **23µs**    | 27KB   | Synthetic                        |
-| Search 1K files            | **203µs**   | 74KB   | Synthetic                        |
-| Search 10K files           | **3.50ms**  | 191KB  | Synthetic (1 outlier)            |
-| Search 50K files           | **20.95ms** | 338KB  | Real dataset                     |
-| Search 100K files          | **41.74ms** | 720KB  | Real dataset                     |
-| Search 100K files, typo    | **44.26ms** | 652KB  | Fuzzy match                      |
-| Vietnamese with accents    | **395µs**   | 52KB   | Normalize + match                |
-| Vietnamese without accents | **394µs**   | 52KB   | Normalize + match                |
-| Search with cache          | **208µs**   | 73KB   | Boost ranking                    |
-| Normalize                  | **1.28µs**  | 112B   | 9 allocs                         |
-| LevenshteinRatio           | **307ns**   | 0B     | Zero allocation                  |
-| RecordSelection            | **372ns**   | 29B    | 2 allocs                         |
-| GetBoostScores             | **33.6µs**  | 9.8KB  | 207 allocs                       |
+| Operation                     | Time         | Memory   | Notes                                     |
+| :---------------------------- | :----------- | :------- | :---------------------------------------- |
+| **NewSearcher (Linux 100K)**  | **106.07ms** | 56.12MB  | Build index (~100K system files)          |
+| **Search 100K (Dataset)**     | **2.33ms**   | 515.41KB | Dataset tự tạo với `make gen` (RealWorld) |
+| **Search 100K (Linux Path)**  | **13.63ms**  | 2.75MB   | Deep nesting (`/usr/lib/...`)             |
+| **Search 100K (Typo/Fuzzy)**  | **13.18ms**  | 5.05KB   | Search sai chính tả                       |
+| **Search 50K (Real dataset)** | **1.06ms**   | 203.16KB | Standard workload                         |
+| **Search with Cache**         | **30.45µs**  | 12.11KB  | Có cache                                  |
+| **Vietnamese (Accents)**      | **32.90µs**  | 11.81KB  | Normalize + Match                         |
+| **Search 1K (Synthetic)**     | **26.40µs**  | 11.81KB  |                                           |
+| **Search 100 (Synthetic)**    | **4.91µs**   | 9.56KB   |                                           |
+| **GetBoostScores**            | **21.90µs**  | 6.80KB   | Ranking logic (12 allocs)                 |
+| **RecordSelection**           | **4.38µs**   | 89B      | 4 allocs                                  |
+| **Normalize**                 | **920.5ns**  | 80B      | String cleaning (5 allocs)                |
+| **LevenshteinRatio**          | **380.8ns**  | 0B       | **Zero allocation core**                  |
+
+*Test và lấy kết quả trung bình sau 5 lần*
 
 ```bash
 GOMAXPROCS=1 taskset -c 1 go test -run=^$ -bench=. -benchmem -benchtime=5s -count=5
@@ -75,89 +76,7 @@ make bench
 ```
 *Make bench không ổn định cho nhiều lần test liên tục, nếu bạn chỉ cần quan tâm test 1 lần*
 
-<details>
-	<summary>Full benchmark</summary>
-
-```
---- Benchmark Info ---
-Đã load 99992 files từ ổ cứng
-----------------------
-goos: linux
-goarch: amd64
-pkg: github.com/versenilvis/fuzzyvn
-cpu: Intel(R) Xeon(R) CPU @ 2.80GHz
-BenchmarkSearch_RealWorld/Search/50k_Files                   286          20856288 ns/op          345724 B/op         50 allocs/op
-BenchmarkSearch_RealWorld/Search/50k_Files                   288          20804539 ns/op          345720 B/op         50 allocs/op
-BenchmarkSearch_RealWorld/Search/50k_Files                   285          20930813 ns/op          345720 B/op         50 allocs/op
-BenchmarkSearch_RealWorld/Search/50k_Files                   285          20952578 ns/op          345720 B/op         50 allocs/op
-BenchmarkSearch_RealWorld/Search/50k_Files                   286          20918743 ns/op          345720 B/op         50 allocs/op
-BenchmarkSearch_RealWorld/Search/100k_Files                  144          41576191 ns/op          736920 B/op         53 allocs/op
-BenchmarkSearch_RealWorld/Search/100k_Files                  144          41627880 ns/op          736920 B/op         53 allocs/op
-BenchmarkSearch_RealWorld/Search/100k_Files                  142          41723329 ns/op          736920 B/op         53 allocs/op
-BenchmarkSearch_RealWorld/Search/100k_Files                  142          41736543 ns/op          736920 B/op         53 allocs/op
-BenchmarkSearch_RealWorld/Search/100k_Files                  142          41683405 ns/op          736920 B/op         53 allocs/op
-BenchmarkSearch_RealWorld/Search/100K_Files_Typo             135          44145793 ns/op          667912 B/op         52 allocs/op
-BenchmarkSearch_RealWorld/Search/100K_Files_Typo             135          44065497 ns/op          667912 B/op         52 allocs/op
-BenchmarkSearch_RealWorld/Search/100K_Files_Typo             135          44135146 ns/op          667912 B/op         52 allocs/op
-BenchmarkSearch_RealWorld/Search/100K_Files_Typo             134          44219059 ns/op          667912 B/op         52 allocs/op
-BenchmarkSearch_RealWorld/Search/100K_Files_Typo             134          44264621 ns/op          667912 B/op         52 allocs/op
-BenchmarkNewSearcher                                       21714            280562 ns/op          330736 B/op       2013 allocs/op
-BenchmarkNewSearcher                                       21277            281646 ns/op          330736 B/op       2013 allocs/op
-BenchmarkNewSearcher                                       21171            280012 ns/op          330736 B/op       2013 allocs/op
-BenchmarkNewSearcher                                       21564            277925 ns/op          330736 B/op       2013 allocs/op
-BenchmarkNewSearcher                                       21510            278624 ns/op          330736 B/op       2013 allocs/op
-BenchmarkSearch/100_files                                 260863             23076 ns/op           27040 B/op         28 allocs/op
-BenchmarkSearch/100_files                                 262005             22977 ns/op           27040 B/op         28 allocs/op
-BenchmarkSearch/100_files                                 255213             23098 ns/op           27040 B/op         28 allocs/op
-BenchmarkSearch/100_files                                 261056             23025 ns/op           27040 B/op         28 allocs/op
-BenchmarkSearch/100_files                                 261691             23007 ns/op           27040 B/op         28 allocs/op
-BenchmarkSearch/1000_files                                 29988            202229 ns/op           74224 B/op        144 allocs/op
-BenchmarkSearch/1000_files                                 29415            203169 ns/op           74224 B/op        144 allocs/op
-BenchmarkSearch/1000_files                                 29596            202583 ns/op           74224 B/op        144 allocs/op
-BenchmarkSearch/1000_files                                 29707            202075 ns/op           74224 B/op        144 allocs/op
-BenchmarkSearch/1000_files                                 29800            200921 ns/op           74224 B/op        144 allocs/op
-BenchmarkSearch/10000_files                                 2053           2925966 ns/op          195672 B/op       1050 allocs/op
-BenchmarkSearch/10000_files                                 2040           2927483 ns/op          195672 B/op       1050 allocs/op
-BenchmarkSearch/10000_files                                 2026           3496008 ns/op          195672 B/op       1050 allocs/op
-BenchmarkSearch/10000_files                                 2053           2920354 ns/op          195672 B/op       1050 allocs/op
-BenchmarkSearch/10000_files                                 2032           2940439 ns/op          195672 B/op       1050 allocs/op
-BenchmarkSearchVietnamese/tiếng_Việt_có_dấu                15255            393876 ns/op           53744 B/op        145 allocs/op
-BenchmarkSearchVietnamese/tiếng_Việt_có_dấu                15200            394326 ns/op           53744 B/op        145 allocs/op
-BenchmarkSearchVietnamese/tiếng_Việt_có_dấu                15199            394632 ns/op           53744 B/op        145 allocs/op
-BenchmarkSearchVietnamese/tiếng_Việt_có_dấu                15228            394102 ns/op           53744 B/op        145 allocs/op
-BenchmarkSearchVietnamese/tiếng_Việt_có_dấu                15255            393487 ns/op           53744 B/op        145 allocs/op
-BenchmarkSearchVietnamese/tiếng_Việt_không_dấu                     15254            393289 ns/op           53712 B/op        141 allocs/op
-BenchmarkSearchVietnamese/tiếng_Việt_không_dấu                     15288            392234 ns/op           53712 B/op        141 allocs/op
-BenchmarkSearchVietnamese/tiếng_Việt_không_dấu                     15238            394197 ns/op           53712 B/op        141 allocs/op
-BenchmarkSearchVietnamese/tiếng_Việt_không_dấu                     15270            392448 ns/op           53712 B/op        141 allocs/op
-BenchmarkSearchVietnamese/tiếng_Việt_không_dấu                     15207            394116 ns/op           53712 B/op        141 allocs/op
-BenchmarkSearchWithCache                                           29049            208234 ns/op           74464 B/op        147 allocs/op
-BenchmarkSearchWithCache                                           28693            208742 ns/op           74464 B/op        147 allocs/op
-BenchmarkSearchWithCache                                           28744            206947 ns/op           74464 B/op        147 allocs/op
-BenchmarkSearchWithCache                                           29205            206766 ns/op           74464 B/op        147 allocs/op
-BenchmarkSearchWithCache                                           29156            205548 ns/op           74464 B/op        147 allocs/op
-BenchmarkNormalize                                               4723686              1270 ns/op             112 B/op          9 allocs/op
-BenchmarkNormalize                                               4719566              1272 ns/op             112 B/op          9 allocs/op
-BenchmarkNormalize                                               4702352              1276 ns/op             112 B/op          9 allocs/op
-BenchmarkNormalize                                               4720912              1271 ns/op             112 B/op          9 allocs/op
-BenchmarkNormalize                                               4632069              1280 ns/op             112 B/op          9 allocs/op
-BenchmarkLevenshteinRatio                                       19559318               306.7 ns/op             0 B/op          0 allocs/op
-BenchmarkLevenshteinRatio                                       19470264               307.2 ns/op             0 B/op          0 allocs/op
-BenchmarkLevenshteinRatio                                       18950019               307.6 ns/op             0 B/op          0 allocs/op
-BenchmarkLevenshteinRatio                                       19590055               305.9 ns/op             0 B/op          0 allocs/op
-BenchmarkLevenshteinRatio                                       19526402               306.4 ns/op             0 B/op          0 allocs/op
-BenchmarkRecordSelection                                        16344829               367.0 ns/op            29 B/op          2 allocs/op
-BenchmarkRecordSelection                                        16391042               367.3 ns/op            29 B/op          2 allocs/op
-BenchmarkRecordSelection                                        16248507               368.4 ns/op            29 B/op          2 allocs/op
-BenchmarkRecordSelection                                        16292912               368.6 ns/op            29 B/op          2 allocs/op
-BenchmarkRecordSelection                                        16262018               372.2 ns/op            29 B/op          2 allocs/op
-BenchmarkGetBoostScores                                           192088             32470 ns/op           10088 B/op        207 allocs/op
-BenchmarkGetBoostScores                                           177350             33597 ns/op           10088 B/op        207 allocs/op
-BenchmarkGetBoostScores                                           183049             33521 ns/op           10088 B/op        207 allocs/op
-BenchmarkGetBoostScores                                           176958             33535 ns/op           10088 B/op        207 allocs/op
-BenchmarkGetBoostScores                                           178576             33578 ns/op           10088 B/op        207 allocs/op
-```
-</details>
+Full benchmark [tại đây](./docs/bench_result_n2.txt)
 
 ## Nếu bạn muốn tự phát triển
 
@@ -243,43 +162,29 @@ func main() {
 	}
 	// Output: /home/user/Code/main.go
 
-	// 5. CACHE SYSTEM - Học hành vi người dùng
-	fmt.Println("\n--- Cache Demo ---")
+	// 5. FILE MEMORY - Học hành vi người dùng (Frecency)
+	fmt.Println("\n--- Memory Demo ---")
 
-	// User tìm "main" và chọn main.go
-	searcher.RecordSelection("main", "/home/user/Code/main.go")
-
-	// Chọn thêm 2 lần nữa
+	// User tìm "main" và chọn main.go (lưu lại lịch sử)
 	searcher.RecordSelection("main", "/home/user/Code/main.go")
 	searcher.RecordSelection("main", "/home/user/Code/main.go")
 
-	// Giờ tìm với từ tương tự → main.go được boost lên top
-	fmt.Println("Tìm 'mai' (sau khi đã cache):")
+	// Lần tìm kiếm sau, file này sẽ được ưu tiên lên top 1 ngay lập tức
+	fmt.Println("Tìm 'mai' (sau khi đã record):")
 	results = searcher.Search("mai")
 	for _, path := range results {
 		fmt.Println("  →", path)
 	}
-	// main.go sẽ lên đầu vì đã được chọn 3 lần
 
-	// 6. XEM THỐNG KÊ CACHE
-	cache := searcher.GetCache()
-
-	fmt.Println("\n--- Thống kê ---")
-	fmt.Println("Recent queries:", cache.GetRecentQueries(3))
-	fmt.Println("Recent files:", cache.GetAllRecentFiles(3))
-	fmt.Printf("Tổng queries: %d\n", cache.Size())
-
-	// 7. TÙY CHỈNH CACHE
-	cache.SetBoostScore(10000) // Tăng độ ưu tiên cho cache
-	cache.SetMaxQueries(200)   // Lưu nhiều queries hơn
-
-	fmt.Println("\n✓ Đã cấu hình cache!")
+	// 6. XÓA BỘ NHỚ LỊCH SỬ
+	searcher.ClearCache()
+	fmt.Println("\n✓ Đã xóa bộ nhớ lịch sử!")
 }
 ```
 </details>
 
 <details>
-  <summary><b>Ví dụ với Cache</b></summary>
+  <summary><b>Ví dụ với Memory (Frecency)</b></summary>
 <br>
 
 
@@ -287,12 +192,12 @@ func main() {
 // Người dùng tìm kiếm
 results := searcher.Search("main")
 
-// Người dùng chọn file
-selectedFile := results[0]
+// Người dùng chọn file (ví dụ chọn kết quả thứ 3)
+selectedFile := results[2]
 searcher.RecordSelection("main", selectedFile)
 
-// Lần tìm kiếm sau, file này được ưu tiên
-results = searcher.Search("mai")  // Gõ sai, vẫn lên đầu nhờ cache
+// Lần tìm kiếm sau với query tương tự, file này được đẩy lên đầu
+results = searcher.Search("mai") 
 ```
 </details>
 
@@ -308,72 +213,31 @@ Xem ví dụ ở [demo](https://github.com/versenilvis/fuzzyvn/tree/main/demo)
 ### API chính
 
 #### `NewSearcher(items []string) *Searcher`
-Tạo searcher mới từ danh sách file paths
+Tạo searcher mới từ danh sách file paths.
 
-```go
-searcher := fuzzyvn.NewSearcher(files)
-```
-
-#### `Search(query string) []string`
-Tìm kiếm và trả về top 20 kết quả phù hợp nhất (hardcode 20)
-
-```go
-results := searcher.Search("readme")
-```
+#### `Search(query string, opts ...*SearchOptions) []string`
+Tìm kiếm và trả về top 20 kết quả phù hợp nhất. Tự động áp dụng điểm cộng từ lịch sử (Memory).
 
 #### `RecordSelection(query, filePath string)`
-Lưu lại file mà người dùng đã chọn để cải thiện kết quả tương lai
+Ghi nhận file người dùng đã chọn để tăng độ ưu tiên (Frecency) cho các lần tìm kiếm sau.
 
-```go
-searcher.RecordSelection("main", "/project/main.go")
-```
-
-#### `GetCache() *QueryCache`
-Lấy cache object để tùy chỉnh hoặc xem thống kê
-
-```go
-cache := searcher.GetCache()
-cache.SetBoostScore(10000)      // Tăng boost
-cache.SetMaxQueries(500)        // Lưu nhiều query hơn
-recentQueries := cache.GetRecentQueries(10)
-```
-
-### QueryCache Methods
-
-```go
-cache := searcher.GetCache()
-
-// Cấu hình
-cache.SetBoostScore(score int)        // Mặc định: 5000
-cache.SetMaxQueries(n int)            // Mặc định: 100
-
-// Thống kê
-cache.GetRecentQueries(limit int) []string
-cache.GetAllRecentFiles(limit int) []string
-cache.GetCachedFiles(query string, limit int) []string
-cache.Size() int
-cache.Clear()
-```
+#### `ClearCache()`
+Xóa toàn bộ lịch sử tìm kiếm và lựa chọn của người dùng.
 
 ### Utility Functions
 
 ```go
 // Normalize string (bỏ dấu tiếng Việt)
 normalized := fuzzyvn.Normalize("Tiếng Việt")
-// Output: "Tieng Viet"
+// Output: "tieng viet"
 
 // Tính khoảng cách Levenshtein
-distance := fuzzyvn.LevenshteinRatio("hello", "helo")
-// Output: 1
-
-// Fuzzy find trong slice
-matches := fuzzyvn.FuzzyFind("pattern", targets)
+distance := fuzzyvn.LevenshteinRatio("hello", "mian")
 ```
 
 **Ví dụ**:
 - User search `"màn hình"` → chọn `"dell-monitor.pdf"`
-- User search `"man hinh"` → `"dell-monitor.pdf"` lên top (similarity 95%)
-- User search `"màn hình dell"` → vẫn boost (contains)
+- User search `"man hinh"` → `"dell-monitor.pdf"` lên top nhờ Frecency boost.
 
 ## Các trường hợp sử dụng
 
@@ -382,33 +246,18 @@ matches := fuzzyvn.FuzzyFind("pattern", targets)
 <br>
 
 ```go
-// Quét thư mục home
+// Quét thư mục
 files := scanDirectory("/home/user")
 searcher := fuzzyvn.NewSearcher(files)
 
-// User gõ, realtime searchautomatically
+// Tìm kiếm realtime
 results := searcher.Search(userInput)
 ```
 
 </details>
 
 <details>
-  <summary><b>2. Document Management</b></summary>
-<br>
- 
-```go
-// Index tài liệu công ty
-docs := scanWithExtensions("/company/docs", []string{".pdf", ".docx"})
-searcher := fuzzyvn.NewSearcher(docs)
-
-// Tìm hợp đồng
-contracts := searcher.Search("hop dong")
-```
-
-</details>
-
-<details>
-  <summary><b>3. Code Search</b></summary>
+  <summary><b>2. Code Search</b></summary>
 <br>
  
 ```go
@@ -416,24 +265,8 @@ contracts := searcher.Search("hop dong")
 code := scanIgnoreDirs("/project", []string{"node_modules", ".git"})
 searcher := fuzzyvn.NewSearcher(code)
 
-// Tìm file main
-mains := searcher.Search("main")
-```
-
-</details>
-
-
-<details>
-  <summary><b>4. Media Library</b></summary>
-<br>
- 
-```go
-// Index nhạc
-music := scanWithExtensions("/music", []string{".mp3", ".flac"})
-searcher := fuzzyvn.NewSearcher(music)
-
-// Tìm bài hát
-songs := searcher.Search("son tung")
+// Tìm file mian -> vẫn ra main.go nhờ typo tolerance & transposition handling
+results := searcher.Search("mian")
 ```
 
 </details>
@@ -441,7 +274,7 @@ songs := searcher.Search("son tung")
 ## Ví dụ nâng cao
 
 <details>
-  <summary><b>Rebuild Index khi file thay đổi</b></summary>
+  <summary><b>Giữ lại Memory khi Rebuild Index</b></summary>
 <br>
  
 ```go
@@ -449,65 +282,14 @@ func watchAndRebuild(searcher **fuzzyvn.Searcher) {
     watcher := setupFileWatcher()
 
     for event := range watcher.Events {
-        // Giữ lại cache
-        cache := (*searcher).GetCache()
+        // Giữ lại memory cũ để không mất lịch sử người dùng
+        oldMemory := (*searcher).Memory
 
-        // Quét lại
-        newFiles := scanDirectory("/data")
+        // Quét lại files mới
+        newFiles := scanDirectory("/project")
 
-        // Rebuild với cache cũ
-        *searcher = fuzzyvn.NewSearcherWithCache(newFiles, cache)
-    }
-}
-```
-
-</details>
-
-<details>
-  <summary><b>Tùy chỉnh cho domain cụ thể</b></summary>
-<br>
- 
-```go
-searcher := fuzzyvn.NewSearcher(files)
-cache := searcher.GetCache()
-
-// Tăng boost cho người dùng power user
-cache.SetBoostScore(15000)
-
-// Lưu nhiều lịch sử hơn
-cache.SetMaxQueries(1000)
-```
-
-</details>
-
-<details>
-  <summary><b>Integration với CLI tool</b></summary>
-<br>
- 
-```go
-func main() {
-    files := scanDirectory(os.Getenv("HOME"))
-    searcher := fuzzyvn.NewSearcher(files)
-
-    reader := bufio.NewReader(os.Stdin)
-    for {
-        fmt.Print("Search> ")
-        query, _ := reader.ReadString('\n')
-        query = strings.TrimSpace(query)
-
-        results := searcher.Search(query)
-        for i, r := range results {
-            fmt.Printf("[%d] %s\n", i, r)
-        }
-
-        fmt.Print("Select> ")
-        input, _ := reader.ReadString('\n')
-        idx, _ := strconv.Atoi(strings.TrimSpace(input))
-
-        if idx >= 0 && idx < len(results) {
-            searcher.RecordSelection(query, results[idx])
-            // Open file...
-        }
+        // Khởi tạo searcher mới với bộ nhớ cũ
+        *searcher = fuzzyvn.NewSearcherWithMemory(newFiles, oldMemory)
     }
 }
 ```

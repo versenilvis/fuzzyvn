@@ -4,6 +4,9 @@
 demo:
 	@cd demo && go run main.go
 
+cli:
+	@cd demo && go run cli_search.go
+
 test:
 	@go test -v
 

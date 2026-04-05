@@ -1,0 +1,124 @@
+--- Linux Benchmark Check ---
+Total files scanned: 100000
+Sample (first 10 files):
+  [1] /usr/bin/Mail
+  [2] /usr/bin/[
+  [3] /usr/bin/aa-enabled
+  [4] /usr/bin/aa-exec
+  [5] /usr/bin/aa-features-abi
+  [6] /usr/bin/addpart
+  [7] /usr/bin/addr2line
+  [8] /usr/bin/anthoscli
+  [9] /usr/bin/apropos
+  [10] /usr/bin/apt
+-----------------------------
+goos: linux
+goarch: amd64
+pkg: github.com/versenilvis/fuzzyvn
+cpu: Intel(R) Xeon(R) CPU @ 2.80GHz
+BenchmarkLinux100k/ascii_short       444          13545388 ns/op            6987 B/op        108 allocs/op
+BenchmarkLinux100k/ascii_short       442          13475385 ns/op            5176 B/op        108 allocs/op
+BenchmarkLinux100k/ascii_short       442          13536435 ns/op            5176 B/op        108 allocs/op
+BenchmarkLinux100k/ascii_short       440          13575241 ns/op            5176 B/op        108 allocs/op
+BenchmarkLinux100k/ascii_short       439          13608167 ns/op            5176 B/op        108 allocs/op
+BenchmarkLinux100k/ascii_ext        1094           5377830 ns/op         1100908 B/op        121 allocs/op
+BenchmarkLinux100k/ascii_ext        1117           5306540 ns/op         1100908 B/op        121 allocs/op
+BenchmarkLinux100k/ascii_ext        1128           5298122 ns/op         1100908 B/op        121 allocs/op
+BenchmarkLinux100k/ascii_ext        1126           5282985 ns/op         1100907 B/op        121 allocs/op
+BenchmarkLinux100k/ascii_ext        1128           5308647 ns/op         1100908 B/op        121 allocs/op
+BenchmarkLinux100k/path_like         442          13623522 ns/op         2878579 B/op        125 allocs/op
+BenchmarkLinux100k/path_like         438          13620400 ns/op         2878579 B/op        125 allocs/op
+BenchmarkLinux100k/path_like         439          13622755 ns/op         2878579 B/op        125 allocs/op
+BenchmarkLinux100k/path_like         439          13591343 ns/op         2878579 B/op        125 allocs/op
+BenchmarkLinux100k/path_like         435          13695149 ns/op         2878579 B/op        125 allocs/op
+BenchmarkLinux100k/typo              439          13591426 ns/op            5176 B/op        108 allocs/op
+BenchmarkLinux100k/typo              451          13203019 ns/op            5176 B/op        108 allocs/op
+BenchmarkLinux100k/typo              456          13123515 ns/op            5176 B/op        108 allocs/op
+BenchmarkLinux100k/typo              453          13140788 ns/op            5176 B/op        108 allocs/op
+BenchmarkLinux100k/typo              453          13256113 ns/op            5176 B/op        108 allocs/op
+BenchmarkLinux100k/long_query        418          14304447 ns/op            2040 B/op         56 allocs/op
+BenchmarkLinux100k/long_query        426          14037046 ns/op            2040 B/op         56 allocs/op
+BenchmarkLinux100k/long_query        424          14150741 ns/op            2040 B/op         56 allocs/op
+BenchmarkLinux100k/long_query        423          14142411 ns/op            2040 B/op         56 allocs/op
+BenchmarkLinux100k/long_query        422          14147781 ns/op            2040 B/op         56 allocs/op
+BenchmarkLinux100k_NewSearcher        52         105781681 ns/op        58893632 B/op     519621 allocs/op
+BenchmarkLinux100k_NewSearcher        50         106528344 ns/op        58893634 B/op     519621 allocs/op
+BenchmarkLinux100k_NewSearcher        54         105485228 ns/op        58894687 B/op     519621 allocs/op
+BenchmarkLinux100k_NewSearcher        50         105520895 ns/op        58893634 B/op     519621 allocs/op
+BenchmarkLinux100k_NewSearcher        52         107028026 ns/op        58893635 B/op     519621 allocs/op
+
+--- Benchmark Info ---
+Đã load 99992 files từ ổ cứng
+----------------------
+BenchmarkSearch_RealWorld/Search/50k_Files                  5154           1074178 ns/op          208038 B/op        115 allocs/op
+BenchmarkSearch_RealWorld/Search/50k_Files                  5296           1071606 ns/op          208036 B/op        115 allocs/op
+BenchmarkSearch_RealWorld/Search/50k_Files                  5400           1069838 ns/op          208035 B/op        115 allocs/op
+BenchmarkSearch_RealWorld/Search/50k_Files                  5452           1055809 ns/op          208034 B/op        115 allocs/op
+BenchmarkSearch_RealWorld/Search/50k_Files                  5326           1054300 ns/op          208036 B/op        115 allocs/op
+BenchmarkSearch_RealWorld/Search/100k_Files                 2456           2335816 ns/op          527776 B/op        118 allocs/op
+BenchmarkSearch_RealWorld/Search/100k_Files                 2445           2340502 ns/op          527778 B/op        118 allocs/op
+BenchmarkSearch_RealWorld/Search/100k_Files                 2476           2327422 ns/op          527773 B/op        118 allocs/op
+BenchmarkSearch_RealWorld/Search/100k_Files                 2431           2336265 ns/op          527779 B/op        118 allocs/op
+BenchmarkSearch_RealWorld/Search/100k_Files                 2442           2328409 ns/op          527778 B/op        118 allocs/op
+BenchmarkSearch_RealWorld/Search/100K_Files_Typo            2518           2328503 ns/op          527768 B/op        118 allocs/op
+BenchmarkSearch_RealWorld/Search/100K_Files_Typo            2491           2330434 ns/op          527772 B/op        118 allocs/op
+BenchmarkSearch_RealWorld/Search/100K_Files_Typo            2481           2338553 ns/op          527773 B/op        118 allocs/op
+BenchmarkSearch_RealWorld/Search/100K_Files_Typo            2475           2331624 ns/op          527774 B/op        118 allocs/op
+BenchmarkSearch_RealWorld/Search/100K_Files_Typo            2496           2729187 ns/op          527771 B/op        118 allocs/op
+BenchmarkNewSearcher                                       14679            408510 ns/op          367920 B/op       5275 allocs/op
+BenchmarkNewSearcher                                       14568            410813 ns/op          367920 B/op       5275 allocs/op
+BenchmarkNewSearcher                                       14701            408493 ns/op          367920 B/op       5275 allocs/op
+BenchmarkNewSearcher                                       14726            407713 ns/op          367920 B/op       5275 allocs/op
+BenchmarkNewSearcher                                       14588            410443 ns/op          367920 B/op       5275 allocs/op
+BenchmarkSearch/100_files                                1217515              4933 ns/op            9792 B/op         35 allocs/op
+BenchmarkSearch/100_files                                1220540              4922 ns/op            9792 B/op         35 allocs/op
+BenchmarkSearch/100_files                                1226635              4898 ns/op            9792 B/op         35 allocs/op
+BenchmarkSearch/100_files                                1220247              4915 ns/op            9792 B/op         35 allocs/op
+BenchmarkSearch/100_files                                1222521              4903 ns/op            9792 B/op         35 allocs/op
+BenchmarkSearch/1000_files                                228225             26215 ns/op           12096 B/op         56 allocs/op
+BenchmarkSearch/1000_files                                227188             26548 ns/op           12096 B/op         56 allocs/op
+BenchmarkSearch/1000_files                                227278             26414 ns/op           12096 B/op         56 allocs/op
+BenchmarkSearch/1000_files                                228376             26362 ns/op           12096 B/op         56 allocs/op
+BenchmarkSearch/1000_files                                226845             26452 ns/op           12096 B/op         56 allocs/op
+BenchmarkSearch/10000_files                                38293            156469 ns/op           54364 B/op        112 allocs/op
+BenchmarkSearch/10000_files                                38310            156510 ns/op           54364 B/op        112 allocs/op
+BenchmarkSearch/10000_files                                38474            156625 ns/op           54364 B/op        112 allocs/op
+BenchmarkSearch/10000_files                                38323            156604 ns/op           54364 B/op        112 allocs/op
+BenchmarkSearch/10000_files                                37935            157548 ns/op           54364 B/op        112 allocs/op
+BenchmarkSearchVietnamese/tiếng_Việt_có_dấu               183123             32829 ns/op           12096 B/op         56 allocs/op
+BenchmarkSearchVietnamese/tiếng_Việt_có_dấu               180850             33178 ns/op           12096 B/op         56 allocs/op
+BenchmarkSearchVietnamese/tiếng_Việt_có_dấu               183297             32911 ns/op           12096 B/op         56 allocs/op
+BenchmarkSearchVietnamese/tiếng_Việt_có_dấu               182935             32839 ns/op           12096 B/op         56 allocs/op
+BenchmarkSearchVietnamese/tiếng_Việt_có_dấu               183638             32748 ns/op           12096 B/op         56 allocs/op
+BenchmarkSearchVietnamese/tiếng_Việt_không_dấu                    183886             32639 ns/op           12096 B/op         56 allocs/op
+BenchmarkSearchVietnamese/tiếng_Việt_không_dấu                    184083             32777 ns/op           12096 B/op         56 allocs/op
+BenchmarkSearchVietnamese/tiếng_Việt_không_dấu                    184334             32780 ns/op           12096 B/op         56 allocs/op
+BenchmarkSearchVietnamese/tiếng_Việt_không_dấu                    183426             32900 ns/op           12096 B/op         56 allocs/op
+BenchmarkSearchVietnamese/tiếng_Việt_không_dấu                    183222             32698 ns/op           12096 B/op         56 allocs/op
+BenchmarkSearchWithCache                                          196995             30476 ns/op           12401 B/op         61 allocs/op
+BenchmarkSearchWithCache                                          196171             30488 ns/op           12401 B/op         61 allocs/op
+BenchmarkSearchWithCache                                          198145             30400 ns/op           12401 B/op         61 allocs/op
+BenchmarkSearchWithCache                                          197866             30437 ns/op           12401 B/op         61 allocs/op
+BenchmarkSearchWithCache                                          198868             30457 ns/op           12401 B/op         61 allocs/op
+BenchmarkNormalize                                               6542079               918.9 ns/op            80 B/op          5 allocs/op
+BenchmarkNormalize                                               6533601               917.2 ns/op            80 B/op          5 allocs/op
+BenchmarkNormalize                                               6538852               917.7 ns/op            80 B/op          5 allocs/op
+BenchmarkNormalize                                               6526231               921.4 ns/op            80 B/op          5 allocs/op
+BenchmarkNormalize                                               6469642               927.4 ns/op            80 B/op          5 allocs/op
+BenchmarkLevenshteinRatio                                       15916920               381.1 ns/op             0 B/op          0 allocs/op
+BenchmarkLevenshteinRatio                                       15678178               383.1 ns/op             0 B/op          0 allocs/op
+BenchmarkLevenshteinRatio                                       15915661               379.5 ns/op             0 B/op          0 allocs/op
+BenchmarkLevenshteinRatio                                       15942763               380.4 ns/op             0 B/op          0 allocs/op
+BenchmarkLevenshteinRatio                                       15666166               379.8 ns/op             0 B/op          0 allocs/op
+BenchmarkRecordSelection                                         1365956              4386 ns/op              89 B/op          4 allocs/op
+BenchmarkRecordSelection                                         1371657              4371 ns/op              89 B/op          4 allocs/op
+BenchmarkRecordSelection                                         1371312              4372 ns/op              89 B/op          4 allocs/op
+BenchmarkRecordSelection                                         1372800              4370 ns/op              89 B/op          4 allocs/op
+BenchmarkRecordSelection                                         1368498              4380 ns/op              89 B/op          4 allocs/op
+BenchmarkGetBoostScores                                           377332             21610 ns/op            6960 B/op         12 allocs/op
+BenchmarkGetBoostScores                                           372626             21795 ns/op            6960 B/op         12 allocs/op
+BenchmarkGetBoostScores                                           370977             21861 ns/op            6960 B/op         12 allocs/op
+BenchmarkGetBoostScores                                           374192             21985 ns/op            6960 B/op         12 allocs/op
+BenchmarkGetBoostScores                                           374412             22244 ns/op            6960 B/op         12 allocs/op
+PASS
+ok      github.com/versenilvis/fuzzyvn  608.906s
