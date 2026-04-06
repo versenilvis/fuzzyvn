@@ -128,9 +128,6 @@ func TestNewSearcher(t *testing.T) {
 	if len(searcher.Normalized) != 3 {
 		t.Errorf("Normalized có %d phần tử, muốn 3", len(searcher.Normalized))
 	}
-	if len(searcher.FilenamesOnly) != 3 {
-		t.Errorf("FilenamesOnly có %d phần tử, muốn 3", len(searcher.FilenamesOnly))
-	}
 	if searcher.Memory == nil {
 		t.Error("Memory không được khởi tạo")
 	}

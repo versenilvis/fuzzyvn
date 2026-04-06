@@ -23,14 +23,12 @@ type MatchResult struct {
 
 // Searcher: Object chính để thực hiện tìm kiếm
 type Searcher struct {
-	Originals     []string            // Danh sách file gốc để trả về kết quả
-	Normalized    [][]byte            // Danh sách file đã chuẩn hóa (byte) để search nhanh
-	FilenamesOnly []string            // Chỉ tên file đã chuẩn hóa (dùng cho typo matching)
-	FilePathToIdx map[string]int      // Map nhanh từ path sang index
-	Memory        *core.FileMemory    // Hệ thống ghi nhớ hành vi (Frecency)
-	Filter        *core.UnigramFilter // Bộ lọc Bitset (K-of-N)
-	baseStarts    []int               // Vị trí bắt đầu của filename trong từng path
-	scorePool     *sync.Pool          // Pool để tái sử dụng []int buffer (tránh race condition)
+	Originals  []string            // Danh sách file gốc để trả về kết quả
+	Normalized [][]byte            // Danh sách file đã chuẩn hóa (byte) để search nhanh
+	Memory     *core.FileMemory    // Hệ thống ghi nhớ hành vi (Frecency)
+	Filter     *core.UnigramFilter // Bộ lọc Bitset (K-of-N)
+	baseStarts []int               // Vị trí bắt đầu của filename trong từng path
+	scorePool  *sync.Pool          // Pool để tái sử dụng []int buffer (tránh race condition)
 }
 
 /*
@@ -41,8 +39,6 @@ func NewSearcher(items []string) *Searcher {
 	numItems := len(items)
 	originals := make([]string, numItems)
 	normPaths := make([][]byte, numItems)
-	normNames := make([]string, numItems)
-	pathMap := make(map[string]int, numItems)
 	baseStarts := make([]int, numItems)
 
 	for i, item := range items {
@@ -66,18 +62,14 @@ func NewSearcher(items []string) *Searcher {
 
 		priorityString := filename + " " + item
 		normPaths[i] = []byte(core.Normalize(priorityString))
-		normNames[i] = normFilename
-		pathMap[item] = i
 	}
 
 	return &Searcher{
-		Originals:     originals,
-		Normalized:    normPaths,
-		FilenamesOnly: normNames,
-		FilePathToIdx: pathMap,
-		Memory:        core.NewFileMemory(nil),
-		Filter:        core.NewUnigramFilter(normPaths),
-		baseStarts:    baseStarts,
+		Originals:  originals,
+		Normalized: normPaths,
+		Memory:     core.NewFileMemory(nil),
+		Filter:     core.NewUnigramFilter(normPaths),
+		baseStarts: baseStarts,
 		scorePool: &sync.Pool{
 			New: func() interface{} {
 				buf := make([]int, numItems)
@@ -202,7 +194,7 @@ func (s *Searcher) Search(query string, opts ...*SearchOptions) []string {
 findButTypo: Tìm kiếm gợi ý khi người dùng gõ sai chính tả (dựa trên Levenshtein)
 */
 func (s *Searcher) findButTypo(query string) []core.FuzzyMatch {
-	numItems := len(s.FilenamesOnly)
+	numItems := len(s.Normalized)
 	if numItems == 0 {
 		return nil
 	}
@@ -233,7 +225,9 @@ func (s *Searcher) findButTypo(query string) []core.FuzzyMatch {
 			defer wg.Done()
 			var local []core.FuzzyMatch
 			for j := s0; j < e; j++ {
-				dist := core.LevenshteinRatio(query, s.FilenamesOnly[j])
+				// extract filename từ Normalized: phần trước baseStart
+				filename := string(s.Normalized[j][:s.baseStarts[j]])
+				dist := core.LevenshteinRatio(query, filename)
 				if dist <= threshold {
 					local = append(local, core.FuzzyMatch{
 						Index: j,
