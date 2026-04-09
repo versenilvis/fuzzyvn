@@ -13,6 +13,7 @@ import (
 // SearchOptions: Tùy chọn nâng cao khi tìm kiếm
 type SearchOptions struct {
 	ContextBoosts map[string]int // Cho phép app truyền điểm cộng từ ngoài vào (ví dụ: sibling files)
+	Limit         int            // Số lượng kết quả tối đa muốn nhận
 }
 
 // MatchResult: Kết quả tìm kiếm thô sau khi chấm điểm
@@ -176,14 +177,18 @@ func (s *Searcher) Search(query string, opts ...*SearchOptions) []string {
 		return rankedResults[i].Score > rankedResults[j].Score
 	})
 
-	// Trả về Top 20 (hoặc tùy cấu hình)
-	limit := 20
-	if len(rankedResults) < limit {
-		limit = len(rankedResults)
+	// Trả về Top Limit
+	resLimit := 20
+	if len(opts) > 0 && opts[0] != nil && opts[0].Limit > 0 {
+		resLimit = opts[0].Limit
+	}
+
+	if len(rankedResults) < resLimit {
+		resLimit = len(rankedResults)
 	}
 	
-	finalStrings := make([]string, limit)
-	for i, res := range rankedResults[:limit] {
+	finalStrings := make([]string, resLimit)
+	for i, res := range rankedResults[:resLimit] {
 		finalStrings[i] = res.Str
 	}
 
