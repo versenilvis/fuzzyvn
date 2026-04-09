@@ -1,6 +1,7 @@
 package fuzzyvn
 
 import (
+	"fmt"
 	"math"
 	"runtime"
 	"sort"
@@ -32,6 +33,38 @@ type Searcher struct {
 	scorePool  *sync.Pool          // Pool để tái sử dụng []int buffer (tránh race condition)
 }
 
+// NewPlainSearcher: search plain text
+func NewPlainSearcher(items []string) *Searcher {
+	numItems := len(items)
+	originals := make([]string, numItems)
+	normPaths := make([][]byte, numItems)
+	baseStarts := make([]int, numItems)
+
+	for i, item := range items {
+		originals[i] = item
+		normItem := core.Normalize(item)
+		baseStarts[i] = len(normItem)
+		normPaths[i] = []byte(normItem)
+	}
+
+	return &Searcher{
+		Originals:  originals,
+		Normalized: normPaths,
+		Memory:     core.NewFileMemory(nil),
+		Filter:     core.NewUnigramFilter(normPaths),
+		baseStarts: baseStarts,
+		scorePool: &sync.Pool{
+			New: func() interface{} {
+				buf := make([]int, numItems)
+				for i := range buf {
+					buf[i] = math.MinInt
+				}
+				return &buf
+			},
+		},
+	}
+}
+
 /*
 NewSearcher: Khởi tạo Searcher và xây dựng Index (Unigram Bitset + Path Normalization)
 - items: Danh sách các đường dẫn file (ví dụ: lấy từ git ls-files hoặc os.ReadDir)
@@ -45,8 +78,8 @@ func NewSearcher(items []string) *Searcher {
 	for i, item := range items {
 		originals[i] = item
 
-		// Tách filename từ path gốc
-		bStart := 0
+		// Check nếu nó là path
+		bStart := -1
 		for j := len(item) - 1; j >= 0; j-- {
 			if item[j] == '/' || item[j] == '\\' {
 				bStart = j + 1
@@ -54,15 +87,22 @@ func NewSearcher(items []string) *Searcher {
 			}
 		}
 
-		filename := item[bStart:]
-		// Priority String format: "filename fullpath"
-		// Target sẽ là "main.go src/main.go" (sau normalize)
-		// baseStart trỏ vào vị trí dấu space giữa filename và path
-		normFilename := core.Normalize(filename)
-		baseStarts[i] = len(normFilename)
-
-		priorityString := filename + " " + item
-		normPaths[i] = []byte(core.Normalize(priorityString))
+		if bStart != -1 && bStart < len(item) {
+			// "filename path"
+			filename := item[bStart:]
+			// Priority String format: "filename fullpath"
+			// Target sẽ là "main.go src/main.go" (sau normalize)
+			// baseStart trỏ vào vị trí dấu space giữa filename và path
+			normFilename := core.Normalize(filename)
+			baseStarts[i] = len(normFilename)
+			priorityString := filename + " " + item
+			normPaths[i] = []byte(core.Normalize(priorityString))
+		} else {
+			// kông phải path, search item bình thường
+			normItem := core.Normalize(item)
+			baseStarts[i] = len(normItem)
+			normPaths[i] = []byte(normItem)
+		}
 	}
 
 	return &Searcher{
@@ -92,6 +132,18 @@ func NewSearcherWithMemory(items []string, memory *core.FileMemory) *Searcher {
 		s.Memory = memory
 	}
 	return s
+}
+
+// SearchDebug: Debug search
+func (s *Searcher) SearchDebug(query string) {
+	fmt.Printf("DEBUG SEARCH Query: [%s]\n", query)
+	queryNorm := core.Normalize(query)
+	queryPattern := []byte(queryNorm)
+
+	for i, item := range s.Originals {
+		score, matched := core.FuzzyScoreGreedy(queryPattern, s.Normalized[i], s.baseStarts[i])
+		fmt.Printf("Item: [%s] | Norm: [%s] | Score: %d | Matched: %v | baseStart: %d\n", item, string(s.Normalized[i]), score, matched, s.baseStarts[i])
+	}
 }
 
 /*
