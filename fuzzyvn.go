@@ -108,18 +108,23 @@ func (s *Searcher) Search(query string, opts ...*SearchOptions) []string {
 	queryNorm := core.Normalize(query)
 	queryPattern := []byte(queryNorm)
 
+	resLimit := 20
+	if len(opts) > 0 && opts[0] != nil && opts[0].Limit > 0 {
+		resLimit = opts[0].Limit
+	}
+
 	memoryBoosts := s.Memory.GetBoostScores(query)
 
 	var matches []core.FuzzyMatch
 	// lọc bớt các file chắc chắn không khớp
 	candidates := s.Filter.Filter(queryPattern)
-	
+
 	if candidates != nil {
 		// chỉ chấm điểm các candidates
-		matches = core.FuzzyFindFiltered(queryPattern, s.Normalized, candidates, s.baseStarts)
+		matches = core.FuzzyFindFiltered(queryPattern, s.Normalized, candidates, s.baseStarts, resLimit)
 	} else {
 		// fallback: full scan parallel (query quá ngắn hoặc filter không hỗ trợ)
-		matches = core.FuzzyFindParallel(queryPattern, s.Normalized, s.baseStarts)
+		matches = core.FuzzyFindParallel(queryPattern, s.Normalized, s.baseStarts, resLimit)
 	}
 
 	// nếu không tìm thấy gì bằng Fuzzy -> Levenshtein
@@ -177,16 +182,10 @@ func (s *Searcher) Search(query string, opts ...*SearchOptions) []string {
 		return rankedResults[i].Score > rankedResults[j].Score
 	})
 
-	// Trả về Top Limit
-	resLimit := 20
-	if len(opts) > 0 && opts[0] != nil && opts[0].Limit > 0 {
-		resLimit = opts[0].Limit
-	}
-
 	if len(rankedResults) < resLimit {
 		resLimit = len(rankedResults)
 	}
-	
+
 	finalStrings := make([]string, resLimit)
 	for i, res := range rankedResults[:resLimit] {
 		finalStrings[i] = res.Str
