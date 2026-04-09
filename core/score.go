@@ -6,7 +6,7 @@ fuzzyScoreGreedy: Tính điểm fuzzy match sử dụng thuật toán tham lam
 - target: Target string đã normalize
 - baseStart: Vị trí bắt đầu của filename trong target
 */
-func fuzzyScoreGreedy(pattern []byte, target []byte, baseStart int) (int, bool) {
+func FuzzyScoreGreedy(pattern []byte, target []byte, baseStart int) (int, bool) {
 	lenP := len(pattern)
 	lenT := len(target)
 

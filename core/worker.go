@@ -46,7 +46,7 @@ func FuzzyFindFiltered(query []byte, items [][]byte, candidates []int, baseStart
 		h := &minHeap{}
 		heap.Init(h)
 		for _, idx := range candidates {
-			if score, matched := fuzzyScoreGreedy(query, items[idx], baseStarts[idx]); matched {
+			if score, matched := FuzzyScoreGreedy(query, items[idx], baseStarts[idx]); matched {
 				if h.Len() < limit {
 					heap.Push(h, FuzzyMatch{Index: idx, Score: score})
 				} else if score > (*h)[0].Score {
@@ -81,7 +81,7 @@ func FuzzyFindFiltered(query []byte, items [][]byte, candidates []int, baseStart
 			h := &minHeap{}
 			heap.Init(h)
 			for _, idx := range candidates[s:e] {
-				if score, matched := fuzzyScoreGreedy(query, items[idx], baseStarts[idx]); matched {
+				if score, matched := FuzzyScoreGreedy(query, items[idx], baseStarts[idx]); matched {
 					if h.Len() < limit {
 						heap.Push(h, FuzzyMatch{Index: idx, Score: score})
 					} else if score > (*h)[0].Score {
@@ -149,7 +149,7 @@ func FuzzyFindParallel(query []byte, items [][]byte, baseStarts []int, limit int
 			h := &minHeap{}
 			heap.Init(h)
 			for j := s; j < e; j++ {
-				if score, matched := fuzzyScoreGreedy(query, items[j], baseStarts[j]); matched {
+				if score, matched := FuzzyScoreGreedy(query, items[j], baseStarts[j]); matched {
 					if h.Len() < limit {
 						heap.Push(h, FuzzyMatch{Index: j, Score: score})
 					} else if score > (*h)[0].Score {
