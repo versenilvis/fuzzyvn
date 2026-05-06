@@ -18,6 +18,7 @@ func FuzzyScoreGreedy(pattern []byte, target []byte, baseStart int) (int, bool) 
 	patternIdx := 0
 	firstMatchIdx := -1
 	lastMatchIdx := -1
+	lastMatchedTargetIdx := -2
 
 	// Duyệt 1 lần duy nhất qua target
 	for i := 0; i < lenT; i++ {
@@ -26,6 +27,11 @@ func FuzzyScoreGreedy(pattern []byte, target []byte, baseStart int) (int, bool) 
 				firstMatchIdx = i
 			}
 			lastMatchIdx = i
+
+			// Bonus điểm cực lớn nếu khớp liên tiếp (contiguous match)
+			if i == lastMatchedTargetIdx+1 {
+				totalScore += 200
+			}
 
 			// Bonus điểm nếu khớp ký tự đầu từ (word boundary)
 			if i == 0 {
@@ -44,6 +50,7 @@ func FuzzyScoreGreedy(pattern []byte, target []byte, baseStart int) (int, bool) 
 				totalScore += 15
 			}
 
+			lastMatchedTargetIdx = i
 			patternIdx++
 		}
 	}
@@ -60,10 +67,17 @@ func FuzzyScoreGreedy(pattern []byte, target []byte, baseStart int) (int, bool) 
 		matchRange = lenP
 	}
 	baseScore := (lenP * 100) - (matchRange-lenP)*5
-	if baseScore < 0 {
-		baseScore = 0
+	// TỪ CHỐI "ĐỘ LOÃNG":
+	// Nếu baseScore <= 0, nghĩa là các ký tự match nằm cách nhau quá xa (độ loãng quá cao).
+	// Ta reject luôn để tránh lệnh rác khổng lồ hứng mọi từ khóa.
+	if baseScore <= 0 {
+		return 0, false
 	}
 	totalScore += baseScore
+
+	// Phạt độ dài: Lệnh càng dài (chứa nhiều rác) càng bị trừ điểm
+	lengthPenalty := lenT * 2
+	totalScore -= lengthPenalty
 
 	// Tier 1: Query là prefix chính xác của filename
 	if baseStart >= lenP {

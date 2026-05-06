@@ -147,10 +147,9 @@ func (s *Searcher) SearchDebug(query string) {
 }
 
 /*
-Search: Thực hiện tìm kiếm fuzzy trên tập dữ liệu đã index
-- opts: Tùy chọn (ContextBoosts...)
+SearchWithScores: Thực hiện tìm kiếm fuzzy và trả về cả điểm số
 */
-func (s *Searcher) Search(query string, opts ...*SearchOptions) []string {
+func (s *Searcher) SearchWithScores(query string, opts ...*SearchOptions) []MatchResult {
 	query = strings.TrimSpace(query)
 	if query == "" {
 		return nil
@@ -238,8 +237,21 @@ func (s *Searcher) Search(query string, opts ...*SearchOptions) []string {
 		resLimit = len(rankedResults)
 	}
 
-	finalStrings := make([]string, resLimit)
-	for i, res := range rankedResults[:resLimit] {
+	return rankedResults[:resLimit]
+}
+
+/*
+Search: Thực hiện tìm kiếm fuzzy trên tập dữ liệu đã index
+- opts: Tùy chọn (ContextBoosts...)
+*/
+func (s *Searcher) Search(query string, opts ...*SearchOptions) []string {
+	rankedResults := s.SearchWithScores(query, opts...)
+	if rankedResults == nil {
+		return nil
+	}
+	
+	finalStrings := make([]string, len(rankedResults))
+	for i, res := range rankedResults {
 		finalStrings[i] = res.Str
 	}
 
